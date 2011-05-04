@@ -1,0 +1,22 @@
+#!/bin/bash
+#PBS -S /bin/bash
+# Use 1 core on 1 node
+#PBS -l nodes=1:ppn=1
+# Maximum time to run of 10 minues 
+#PBS -l walltime=00:20:00 
+                          
+
+module load gcc/4.3.3 # NEED TO LOAD CORRECT
+                      # VERSION OF GCC
+cd $PBS_O_WORKDIR     # Change to directory from 
+                      # which job was submitted
+                      
+export OMP_NUM_THREADS=8
+
+./laplace <<END
+1000
+1000
+1000
+0.01
+300
+END
