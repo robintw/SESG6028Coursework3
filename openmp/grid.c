@@ -1,4 +1,4 @@
-
+	
 /* 
 
 Code that solves Laplace's equation in 3D for Dirichlet boundary conditions set in
@@ -17,6 +17,8 @@ Written by I.J.Bush March 2011 - if it breaks your computer or aught else, tough
 #include "grid.h"
 #include "array_alloc.h"
 #include "timer.h"
+
+#include <omp.h>
 
 int grid_init( int ng[ 3 ], struct grid *g )
 {
@@ -168,6 +170,8 @@ double grid_update( struct grid *g ){
   int current, update;
   int lb0, lb1, lb2, ub0, ub1, ub2;
   int i, j, k;
+  
+  int tid;
 
   /* Work out which version of the grid hold the current values, and
      which we will write the update into */
@@ -198,23 +202,24 @@ double grid_update( struct grid *g ){
   /* Perform the update and check for convergence  */
   start = timer();
   dg = 0.0;
-  #pragma omp parallel default(none) private(i, j, k) shared(lb0, ub0, lb1, ub1, lb2, ub2, g, current, update, diff, dg)
-  #pragma omp collapse(3)
-  #pragma omp for
-  for( i = lb0; i <= ub0; i++ ) {
-    for( j = lb1; j <= ub1; j++ ) {
-      for( k = lb2; k <= ub2; k++ ) {
-	g->data[ update ][ i ][ j ][ k ] = 
-	  ONE_SIXTH * ( g->data[ current ][ i + 1 ][ j     ][ k     ] +
-			g->data[ current ][ i - 1 ][ j     ][ k     ] +
-			g->data[ current ][ i     ][ j + 1 ][ k     ] +
-			g->data[ current ][ i     ][ j - 1 ][ k     ] +
-			g->data[ current ][ i     ][ j     ][ k + 1 ] +
-			g->data[ current ][ i     ][ j     ][ k - 1 ] );
-	diff = fabs( g->data[ update ][ i ][ j ][ k ] - g->data[ current ][ i ][ j ][ k ] );
-	dg = dg > diff ? dg : diff;
-      }
-    }
+  #pragma omp parallel
+  {
+	  #pragma omp for private(i, j, k)
+	  for( i = lb0; i <= ub0; i++ ) {
+		for( j = lb1; j <= ub1; j++ ) {
+		  for( k = lb2; k <= ub2; k++ ) {
+		g->data[ update ][ i ][ j ][ k ] = 
+		  ONE_SIXTH * ( g->data[ current ][ i + 1 ][ j     ][ k     ] +
+				g->data[ current ][ i - 1 ][ j     ][ k     ] +
+				g->data[ current ][ i     ][ j + 1 ][ k     ] +
+				g->data[ current ][ i     ][ j - 1 ][ k     ] +
+				g->data[ current ][ i     ][ j     ][ k + 1 ] +
+				g->data[ current ][ i     ][ j     ][ k - 1 ] );
+		diff = fabs( g->data[ update ][ i ][ j ][ k ] - g->data[ current ][ i ][ j ][ k ] );
+		dg = dg > diff ? dg : diff;
+		  }
+		}
+	  }
   }
   finish = timer();
   g->t_iter += finish - start;
