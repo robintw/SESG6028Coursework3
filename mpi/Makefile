@@ -6,7 +6,7 @@ OBJS =	array_alloc.o grid.o test.o timer.o
 
 LIBS =	
 
-CC = gcc
+CC = mpicc
 CFLAGS = -O -Wall -W -pedantic -std=c89 -g
 FC = gfortran
 FFLAGS = -O -Wall -W -Wextra -pedantic -std=f2003 -fbounds-check -g -fbacktrace -fdump-core 

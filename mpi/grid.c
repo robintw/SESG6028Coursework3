@@ -17,6 +17,7 @@ Written by I.J.Bush March 2011 - if it breaks your computer or aught else, tough
 #include "grid.h"
 #include "array_alloc.h"
 #include "timer.h"
+#include <mpi.h>
 
 int grid_init( int ng[ 3 ], struct grid *g )
 {
@@ -29,6 +30,55 @@ int grid_init( int ng[ 3 ], struct grid *g )
   */
 
   int i;
+  int dim_size[3];
+  int periods[3];
+  int coords[3];
+  int npx = 1;
+  int npy = 2;
+  int npz = 3;
+  int rank;
+  
+  MPI_Comm cart_comm; 
+  /* Calculate the dimensions of the process grid to use */
+  
+  
+  /* Create the cartesian communicator */
+  dim_size[0] = npx;
+  dim_size[1] = npy;
+  dim_size[2] = npz;
+  periods[0] = 1;
+  periods[1] = 1;
+  periods[2] = 1;
+  
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+  /* Create the communicator */	
+  MPI_Cart_create(MPI_COMM_WORLD, 3, dim_size, periods, 1, &cart_comm);
+	
+  /* Get our co-ordinates within that communicator */
+  MPI_Cart_coords(cart_comm, rank, 3, coords);
+		
+  g->nx = ceil(ng[0] / (float) npx);
+  g->ny = ceil(ng[1] / (float) npy);
+  g->nz = ceil(ng[2] / (float) npz);
+		
+  if (coords[0] == (npx - 1))
+  {
+		/* We're at the far end of x */
+		g->nx = ng[0] - (g->nx * (npx - 1));
+  }
+  if (coords[1] == (npy - 1))
+  {
+		/* We're at the far end of y */
+		g->ny = ng[1] - (g->ny * (npy - 1));
+  }
+  if (coords[2] == (npz - 1))
+  {
+		/* We're at the far end of z */
+		g->nz = ng[2] - (g->nz * (npz - 1));
+  }
+  
+  printf("Rank: %d at location (%d, %d, %d) with sizes %d, %d, %d\n", rank, coords[0], coords[1], coords[2], g->nx, g->ny, g->nz);
 
   /* Store the size of the grid */
   for( i = 0; i < 3; i++ ){

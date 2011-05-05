@@ -1,3 +1,4 @@
+#include <mpi.h>
 
 /* Include file for grid.c - for more details see there */
 
@@ -15,6 +16,19 @@ struct grid {
   int ng[ 3 ];         /* The size of the grid */
   int n_iter;          /* The number of iterations */
   double t_iter;       /* The time in the iterations */
+  MPI_Comm cart_comm;
+  
+  int npx;
+  int npy;
+  int npz;
+  
+  int nx;
+  int ny;
+  int nz;
+  
+  int px;
+  int py;
+  int pz;
 
 };
 
