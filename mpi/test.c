@@ -76,14 +76,19 @@ int main(int argc, char ** argv)
 
   /* Initialise the grid */
   error = grid_init( ng, &g );
-    
-  if( error == 0 ) {
-
-    /* Set the inital guess at the solution */
+  
+  printf("Grid initialised\n");
+  
+  /* Set the inital guess at the solution */
     grid_initial_guess( &g );
 
     /* Set the boundary conditions */
     grid_set_boundary( &g );
+    
+    MPI_Barrier(MPI_COMM_WORLD);
+    
+  if( error == 0 ) {
+    
 
     /* Loop updating the grid until the change is sufficently small to consider
        the calculation converged */

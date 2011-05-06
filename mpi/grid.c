@@ -41,6 +41,14 @@ int grid_init( int ng[ 3 ], struct grid *g )
   MPI_Comm cart_comm; 
   /* Calculate the dimensions of the process grid to use */
   
+    /* Store the size of the full grid */
+  for( i = 0; i < 3; i++ ){
+    g->ng[ i ] = ng[ i ];
+  }
+  
+  g->npx = npx;
+  g->npy = npy;
+  g->npz = npz;
   
   /* Create the cartesian communicator */
   dim_size[0] = npx;
@@ -78,24 +86,28 @@ int grid_init( int ng[ 3 ], struct grid *g )
 		g->nz = ng[2] - (g->nz * (npz - 1));
   }
   
+  /* Store the coords in the g structure */
+  g->px = coords[0];
+  g->py = coords[1];
+  g->pz = coords[2];
+  
   printf("Rank: %d at location (%d, %d, %d) with sizes %d, %d, %d\n", rank, coords[0], coords[1], coords[2], g->nx, g->ny, g->nz);
-
-  /* Store the size of the grid */
-  for( i = 0; i < 3; i++ ){
-    g->ng[ i ] = ng[ i ];
-  }
 
   /* Allocate the grid. Note we will need two versions of the data on the grid, one to hold
      the current values, and one to write the results into when we are updating the grid. We swap between
-     the two versions as we go from iteration to iteration, the current member of the derived type
+     the two versions as we go from iteration to iteration, the 'current' member of the derived type
      indicating which version is the most up to date. */
-  for( i = 0; i < 2; i++ ){
 
-    g->data[ i ] = alloc_3d_double( g->ng[ 0 ], g->ng[ 1 ], g->ng[ 2 ] ); 
+ for( i = 0; i < 2; i++ ){
+
+    g->data[ i ] = alloc_3d_double(g->nx, g->ny, g->nz ); 
     if( g->data[ i ] == NULL )
+    {
+      printf("Failed to allocated memory.\n");
       return EXIT_FAILURE;
+    }
   }
-
+  
   /* Which version of the grid is the "current" version. The other we will write
      the next result into */
   g->current = 0;
@@ -104,6 +116,7 @@ int grid_init( int ng[ 3 ], struct grid *g )
   g->t_iter = 0.0;
   g->n_iter = 0;
 
+  printf("Returning\n");
   return EXIT_SUCCESS;
 
 }
@@ -125,10 +138,12 @@ void grid_initial_guess( struct grid *g )
 
   int i, j, k, l;
 
+  printf("Inside grid_initial_guess\n");
+  
     for( i = 0; i < 2; i++ ){
-      for( j = 0; j < g->ng[ 0 ] - 1; j++ ){
-	for( k = 0; k < g->ng[ 1 ] - 1; k++ ){
-	  for( l = 0; l < g->ng[ 2 ] - 1; l++ ){
+      for( j = 0; j < g->nx - 1; j++ ){
+	for( k = 0; k < g->ny - 1; k++ ){
+	  for( l = 0; l < g->nz - 1; l++ ){
 	    g->data[ i ][ j ][ k ][ l ] = 0.0;
 	  }
 	}
@@ -146,67 +161,114 @@ void grid_set_boundary( struct grid *g )
      to unity */
 
   int i, j, k;
+  
+  printf("Inside grid_set_boundary: px = %d / %d, py = %d / %d, pz = %d / %d\n", g->px, g->npx, g->py, g->npy, g->pz, g->npz);
 
   /* Set each face of the cuboid in turn */
   /* Also remember that we need to do do it for both versions */
-
-  /* The (ngx,y,z) face, set to zero*/
-  for( k = 0; k < 2; k++ ){
-    for( i = 0; i < g->ng[ 1 ]; i++ ){
-      for( j = 0; j < g->ng[ 2 ]; j++ ){
-	  g->data[ k ][ g->ng[ 0 ] - 1 ][ i ][ j ] = 0.0;
-      }
-    }
-  } 
-
-  /* The (x,ngy,z) face, set to zero*/
-  for( k = 0; k < 2; k++ ){
-    for( i = 0; i < g->ng[ 0 ]; i++ ){
-      for( j = 0; j < g->ng[ 2 ]; j++ ){
-	g->data[ k ][ i ][ g->ng[ 1 ] - 1 ][ j ] = 0.0;
-      }
-    }
-  } 
-
-  /* The (x,y,ngz) face, set to zero*/
-  for( k = 0; k < 2; k++ ){
-    for( i = 0; i < g->ng[ 0 ]; i++ ){
-      for( j = 0; j < g->ng[ 1 ]; j++ ){
-	g->data[ k ][ i ][ j ][ g->ng[ 2 ] - 1 ] = 0.0;
-      }
-    }
-  } 
-
-  /* The (0,y,z) face, set to zero*/
-  for( k = 0; k < 2; k++ ){
-    for( i = 0; i < g->ng[ 1 ]; i++ ){
-      for( j = 0; j < g->ng[ 2 ]; j++ ){
-	g->data[ k ][ 0 ][ i ][ j ] = 0.0;
-      }
-    }
-  } 
-
-  /* The (x,0,z) face, set to zero*/
-  for( k = 0; k < 2; k++ ){
-    for( i = 0; i < g->ng[ 0 ]; i++ ){
-      for( j = 0; j < g->ng[ 2 ]; j++ ){
-	g->data[ k ][ i ][ 0 ][ j ] = 0.0;
-      }
-    }
-  } 
-
-  /* The (x,y,0) face, set to unity*/
-  for( k = 0; k < 2; k++ ){
-    for( i = 0; i < g->ng[ 0 ]; i++ ){
-      for( j = 0; j < g->ng[ 1 ]; j++ ){
-	g->data[ k ][ i ][ j ][ 0 ] = 1.0;
-      }
-    }
-  } 
-
+  
+  /* Our coords in the process grid are stored in g as px, py and pz. If any of these = 0 or = npx
+  (or npy or npz) then we're on the edge of the cuboid, and where we are. We then need to choose
+  the correct bit of the array to set. Remember we're doing this for both versions of the grid */
+  
+  if (g->px == 0)
+  {
+  	printf("At x = 0\n");
+  	/* We're at the x = 0 face of the grid. So we need to set the entire face equal to zero */
+  	for (k = 0; k < 2; k++)
+  	{
+  		for (i = 0; i < g->ny; i++)
+  		{
+  			for (j = 0; j < g->nz; j++)
+  			{
+  				g->data[k][0][i][j] = 0.0;
+  			}
+  		}
+  	}
+  }
+  if (g->px == (g->npx - 1))
+  {
+    printf("At x = npx\n");
+	/* We're at the high x face of the grid. So we need to set the entire face equal to zero */
+	for (k = 0; k < 2; k++)
+  	{
+  		for (i = 0; i < g->ny; i++)
+  		{
+  			for (j = 0; j < g->nz; j++)
+  			{
+  				g->data[k][g->nx-1][i][j] = 0.0;
+  			}
+  		}
+  	}
+  }
+  	
+  	
+  	if (g->py == 0)
+  	{
+  		printf("At y = 0\n");
+		/* We're at the y = 0 face of the grid. So we need to set the entire face equal to zero */
+		for (k = 0; k < 2; k++)
+		{
+			for (i = 0; i < g->nx; i++)
+			{
+				for (j = 0; j < g->nz; j++)
+				{
+					g->data[k][i][0][j] = 0.0;
+				}
+			}
+		}
+	}
+  	if (g->py == (g->npy - 1))
+  	{
+  		printf("At y = npy\n");
+		/* We're at the high y face of the grid. So we need to set the entire face equal to zero */
+		for (k = 0; k < 2; k++)
+		{
+			for (i = 0; i < g->nx; i++)
+			{
+				for (j = 0; j < g->nz; j++)
+				{
+					g->data[k][i][g->ny-1][j] = 0.0;
+				}
+			}
+		}
+  	}
+  	
+  	if (g->pz == 0)
+  	{
+  		printf("At z = 0\n");
+		/* We're at the z = 0 face of the grid. So we need to set the entire face equal to ONE (unity) */
+		for (k = 0; k < 2; k++)
+		{
+			for (i = 0; i < g->nx; i++)
+			{
+				for (j = 0; j < g->ny; j++)
+				{
+					g->data[k][i][j][0] = 1.0;
+				}
+			}
+		}
+	}
+  	if (g->pz == (g->npz - 1))
+  	{
+  		printf("At z = npz\n");
+		/* We're at the high z face of the grid. So we need to set the entire face equal to zero */
+		for (k = 0; k < 2; k++)
+		{
+			for (i = 0; i < g->nx; i++)
+			{
+				for (j = 0; j < g->ny; j++)
+				{
+					g->data[k][i][j][g->nz-1] = 0.0;
+				}
+			}
+		}
+	}
+	
+	printf("Finished grid_set_boundary\n");
 }
 
-double grid_update( struct grid *g ){
+double grid_update( struct grid *g ) {
 
   /* Perform the grid update */
 
@@ -273,7 +335,6 @@ double grid_update( struct grid *g ){
   g->current = update;
 
   return dg;
-
 }
 
 double grid_checksum( struct grid g ){
