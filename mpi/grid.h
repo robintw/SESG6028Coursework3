@@ -29,6 +29,13 @@ struct grid {
   int px;
   int py;
   int pz;
+  
+  int north;
+  int south;
+  int east;
+  int west;
+  int up;
+  int down;
 
 };
 

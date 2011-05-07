@@ -67,7 +67,12 @@ int grid_init( int ng[ 3 ], struct grid *g )
 	
   /* Get our co-ordinates within that communicator */
   MPI_Cart_coords(cart_comm, rank, 3, coords);
-		
+  
+  /* Who are my neighbours in each direction? */
+  MPI_Cart_shift( cart_comm, 1, 1, &g->north, &g->south    );
+  MPI_Cart_shift( cart_comm, 0, 1, &g->west, &g->east );
+  MPI_Cart_shift( cart_comm, 2, 1, &g->up, &g->down );
+
   g->nx = ceil(ng[0] / (float) npx);
   g->ny = ceil(ng[1] / (float) npy);
   g->nz = ceil(ng[2] / (float) npz);
@@ -93,7 +98,7 @@ int grid_init( int ng[ 3 ], struct grid *g )
   g->py = coords[1];
   g->pz = coords[2];
   
-  printf("Rank: %d at location (%d, %d, %d) with sizes %d, %d, %d\n", rank, coords[0], coords[1], coords[2], g->nx, g->ny, g->nz);
+  printf("Rank: %d at location (%d, %d, %d) with sizes %d, %d, %d. N: %d, S: %d, E: %d, W: %d, U: %d, D: %d\n", rank, coords[0], coords[1], coords[2], g->nx, g->ny, g->nz, g->north, g->south, g->east, g->west, g->up, g->down);
 
   /* Allocate the grid. Note we will need two versions of the data on the grid, one to hold
      the current values, and one to write the results into when we are updating the grid. We swap between
