@@ -33,9 +33,9 @@ int grid_init( int ng[ 3 ], struct grid *g )
   int dim_size[3];
   int periods[3];
   int coords[3];
-  int npx = 1;
+  int npx = 3;
   int npy = 2;
-  int npz = 3;
+  int npz = 1;
   int rank;
   
   MPI_Comm cart_comm; 
@@ -50,13 +50,15 @@ int grid_init( int ng[ 3 ], struct grid *g )
   g->npy = npy;
   g->npz = npz;
   
-  /* Create the cartesian communicator */
+  /* Create the cartesian communicator with the sizes of the processor grid
+  Set all dimensions to be NON-PERIODIC as we don't need/want to loop back across the grid
+  as we have to not update the dimensions anyway! */
   dim_size[0] = npx;
   dim_size[1] = npy;
   dim_size[2] = npz;
-  periods[0] = 1;
-  periods[1] = 1;
-  periods[2] = 1;
+  periods[0] = 0;
+  periods[1] = 0;
+  periods[2] = 0;
   
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
