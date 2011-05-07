@@ -103,11 +103,14 @@ int grid_init( int ng[ 3 ], struct grid *g )
   /* Allocate the grid. Note we will need two versions of the data on the grid, one to hold
      the current values, and one to write the results into when we are updating the grid. We swap between
      the two versions as we go from iteration to iteration, the 'current' member of the derived type
-     indicating which version is the most up to date. */
+     indicating which version is the most up to date.
+     
+     We're making the array 2 cells bigger in each dimension so that we have a spare cell at the end of every row etc. so that we
+     can send and receive into/from that extra bit. */
 
  for( i = 0; i < 2; i++ ){
 
-    g->data[ i ] = alloc_3d_double(g->nx, g->ny, g->nz ); 
+    g->data[ i ] = alloc_3d_double(g->nx + 2, g->ny + 2, g->nz +2 ); 
     if( g->data[ i ] == NULL )
     {
       printf("Failed to allocated memory.\n");
