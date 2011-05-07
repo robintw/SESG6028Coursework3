@@ -36,6 +36,15 @@ struct grid {
   int west;
   int up;
   int down;
+  
+  int ub_x;
+  int lb_x;
+  
+  int ub_y;
+  int lb_y;
+  
+  int ub_z;
+  int lb_z;
 
 };
 

@@ -179,7 +179,20 @@ void grid_set_boundary( struct grid *g )
   
   /* Our coords in the process grid are stored in g as px, py and pz. If any of these = 0 or = npx
   (or npy or npz) then we're on the edge of the cuboid, and where we are. We then need to choose
-  the correct bit of the array to set. Remember we're doing this for both versions of the grid */
+  the correct bit of the array to set. Remember we're doing this for both versions of the grid 
+  
+  We're also setting the upper and lower bounds for later loops (ub and lb variables). These should
+  be 1 and (n - 2) in the normal case (because the array is 1 bigger in each dimension). We initialise
+  them all first to something that will be correct for anything that isn't changed below. */
+  
+  g->lb_x = 1;
+  g->ub_x = (g->nx - 2);
+  
+  g->lb_y = 1;
+  g->ub_y = (g->ny - 2);
+  
+  g->lb_z = 1;
+  g->ub_z = (g->nz - 2);
   
   if (g->px == 0)
   {
@@ -191,10 +204,11 @@ void grid_set_boundary( struct grid *g )
   		{
   			for (j = 0; j < g->nz; j++)
   			{
-  				g->data[k][0][i][j] = 0.0;
+  				g->data[k][1][i][j] = 0.0;
   			}
   		}
   	}
+  	g->lb_x = 2;
   }
   if (g->px == (g->npx - 1))
   {
@@ -206,10 +220,11 @@ void grid_set_boundary( struct grid *g )
   		{
   			for (j = 0; j < g->nz; j++)
   			{
-  				g->data[k][g->nx-1][i][j] = 0.0;
+  				g->data[k][g->nx-2][i][j] = 0.0;
   			}
   		}
   	}
+  	g->ub_x = (g->nx - 3);
   }
   	
   	
@@ -223,10 +238,11 @@ void grid_set_boundary( struct grid *g )
 			{
 				for (j = 0; j < g->nz; j++)
 				{
-					g->data[k][i][0][j] = 0.0;
+					g->data[k][i][1][j] = 0.0;
 				}
 			}
 		}
+		g->lb_y = 2;
 	}
   	if (g->py == (g->npy - 1))
   	{
@@ -238,10 +254,11 @@ void grid_set_boundary( struct grid *g )
 			{
 				for (j = 0; j < g->nz; j++)
 				{
-					g->data[k][i][g->ny-1][j] = 0.0;
+					g->data[k][i][g->ny-2][j] = 0.0;
 				}
 			}
 		}
+		g->ub_y = (g->ny - 3);
   	}
   	
   	if (g->pz == 0)
@@ -254,10 +271,11 @@ void grid_set_boundary( struct grid *g )
 			{
 				for (j = 0; j < g->ny; j++)
 				{
-					g->data[k][i][j][0] = 1.0;
+					g->data[k][i][j][1] = 1.0;
 				}
 			}
 		}
+		g->lb_z = 2;
 	}
   	if (g->pz == (g->npz - 1))
   	{
@@ -269,10 +287,11 @@ void grid_set_boundary( struct grid *g )
 			{
 				for (j = 0; j < g->ny; j++)
 				{
-					g->data[k][i][j][g->nz-1] = 0.0;
+					g->data[k][i][j][g->nz-2] = 0.0;
 				}
 			}
 		}
+		g->ub_z = (g->nz-2);
 	}
 	
 	printf("Finished grid_set_boundary\n");
