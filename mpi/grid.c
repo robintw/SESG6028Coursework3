@@ -110,7 +110,7 @@ int grid_init( int ng[ 3 ], struct grid *g )
 
  for( i = 0; i < 2; i++ ){
 
-    g->data[ i ] = alloc_3d_double(g->nx + 2, g->ny + 2, g->nz +2 ); 
+    g->data[ i ] = alloc_3d_double(g->nz + 2, g->ny + 2, g->nx +2 ); 
     if( g->data[ i ] == NULL )
     {
       printf("Failed to allocated memory.\n");
@@ -136,8 +136,8 @@ void grid_finalize( struct grid *g )
 
   /* Free the grid */
 
-  free_3d_double( g->data[ 1 ], g->ng[ 0 ] );
-  free_3d_double( g->data[ 0 ], g->ng[ 0 ] );
+  free_3d_double( g->data[ 1 ], g->nx );
+  free_3d_double( g->data[ 0 ], g->nx );
 
 }
 
@@ -200,11 +200,11 @@ void grid_set_boundary( struct grid *g )
   	/* We're at the x = 0 face of the grid. So we need to set the entire face equal to zero */
   	for (k = 0; k < 2; k++)
   	{
-  		for (i = 0; i < g->ny; i++)
+  		for (i = 0; i < g->nz; i++)
   		{
-  			for (j = 0; j < g->nz; j++)
+  			for (j = 0; j < g->ny; j++)
   			{
-  				g->data[k][1][i][j] = 0.0;
+  				g->data[k][i][j][1] = 0.0;
   			}
   		}
   	}
@@ -220,7 +220,7 @@ void grid_set_boundary( struct grid *g )
   		{
   			for (j = 0; j < g->nz; j++)
   			{
-  				g->data[k][g->nx-2][i][j] = 0.0;
+  				g->data[k][j][i][g->nx-2] = 0.0;
   			}
   		}
   	}
@@ -238,7 +238,7 @@ void grid_set_boundary( struct grid *g )
 			{
 				for (j = 0; j < g->nz; j++)
 				{
-					g->data[k][i][1][j] = 0.0;
+					g->data[k][j][1][i] = 0.0;
 				}
 			}
 		}
@@ -254,7 +254,7 @@ void grid_set_boundary( struct grid *g )
 			{
 				for (j = 0; j < g->nz; j++)
 				{
-					g->data[k][i][g->ny-2][j] = 0.0;
+					g->data[k][j][g->ny-2][i] = 0.0;
 				}
 			}
 		}
@@ -271,7 +271,7 @@ void grid_set_boundary( struct grid *g )
 			{
 				for (j = 0; j < g->ny; j++)
 				{
-					g->data[k][i][j][1] = 1.0;
+					g->data[k][1][j][i] = 1.0;
 				}
 			}
 		}
@@ -287,7 +287,7 @@ void grid_set_boundary( struct grid *g )
 			{
 				for (j = 0; j < g->ny; j++)
 				{
-					g->data[k][i][j][g->nz-2] = 0.0;
+					g->data[k][g->nz-2][j][i] = 0.0;
 				}
 			}
 		}
@@ -307,7 +307,6 @@ double grid_update( struct grid *g ) {
   double start, finish;
 
   int current, update;
-  int lb0, lb1, lb2, ub0, ub1, ub2;
   int i, j, k;
 
   /* Work out which version of the grid hold the current values, and
@@ -325,37 +324,37 @@ double grid_update( struct grid *g ) {
     fprintf( stderr, "Internal error: impossible value for g->current\n" );
     exit( EXIT_FAILURE );
   }
-
-  /* Bounds for the loops. Remember we should not update the
-     boundaries as they are set by the boundary conditions */
-  lb0 = 1;
-  lb1 = 1;
-  lb2 = 1;
-
-  ub0 = g->ng[ 0 ] - 2;
-  ub1 = g->ng[ 1 ] - 2;
-  ub2 = g->ng[ 2 ] - 2;
+  
 
   /* Perform the update and check for convergence  */
-  start = timer();
+  
   dg = 0.0;
-  for( i = lb0; i <= ub0; i++ ) {
-    for( j = lb1; j <= ub1; j++ ) {
-      for( k = lb2; k <= ub2; k++ ) {
-	g->data[ update ][ i ][ j ][ k ] = 
-	  ONE_SIXTH * ( g->data[ current ][ i + 1 ][ j     ][ k     ] +
-			g->data[ current ][ i - 1 ][ j     ][ k     ] +
-			g->data[ current ][ i     ][ j + 1 ][ k     ] +
-			g->data[ current ][ i     ][ j - 1 ][ k     ] +
-			g->data[ current ][ i     ][ j     ][ k + 1 ] +
-			g->data[ current ][ i     ][ j     ][ k - 1 ] );
-	diff = fabs( g->data[ update ][ i ][ j ][ k ] - g->data[ current ][ i ][ j ][ k ] );
-	dg = dg > diff ? dg : diff;
+  
+  /* Get the neighbouring faces from the grid neighbours */
+  
+  /* Exchange for the western face of the chunk */
+  printf("Doing exchange for WEST: Send to %d. Receive from %d\n", g->west, g->west);
+  MPI_Sendrecv(&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, 0,
+  		&g->data[current][g->nz-1][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  
+  /* Loop through and do the calculations */
+  for( i = g->lb_x; i <= g->ub_x; i++ )
+  {
+    for( j = g->lb_y; j <= g->ub_y; j++ )
+    {
+      for( k = g->lb_z; k <= g->ub_z; k++ )
+      {
+		g->data[ update ][ i ][ j ][ k ] = ONE_SIXTH * ( g->data[ current ][ i + 1 ][ j     ][ k     ] +
+		g->data[ current ][ i - 1 ][ j     ][ k     ] +
+		g->data[ current ][ i     ][ j + 1 ][ k     ] +
+		g->data[ current ][ i     ][ j - 1 ][ k     ] +
+		g->data[ current ][ i     ][ j     ][ k + 1 ] +
+		g->data[ current ][ i     ][ j     ][ k - 1 ] );
+		diff = fabs( g->data[ update ][ i ][ j ][ k ] - g->data[ current ][ i ][ j ][ k ] );
+		dg = dg > diff ? dg : diff;
       }
     }
   }
-  finish = timer();
-  g->t_iter += finish - start;
 
   /* Update the iteration counter */
   g->n_iter++;
@@ -376,9 +375,9 @@ double grid_checksum( struct grid g ){
   int i, j, k;
 
   sum = 0.0;
-  for( i = 0; i < g.ng[ 0 ]; i++ ) {
-    for( j = 0; j < g.ng[ 1 ]; j++ ) {
-      for( k = 0; k < g.ng[ 2 ]; k++ ) {
+  for( i = 1; i < g.ng[ 0 ] - 1; i++ ) {
+    for( j = 1; j < g.ng[ 1 ] - 1; j++ ) {
+      for( k = 1; k < g.ng[ 2 ] - 1; k++ ) {
 	sum += g.data[ g.current ][ i ][ j ][ k ];
       }
     }

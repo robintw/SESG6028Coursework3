@@ -16,7 +16,7 @@ int main(int argc, char ** argv)
 
   time_t tp;
 
-  double tol, dg, check;
+  double tol, dg, check, total_check, max_dg;
   double start, finish;
 
   int ng[ 3 ];
@@ -29,8 +29,6 @@ int main(int argc, char ** argv)
 
   int nprocs;
   int rank;
-  
-  int nx, ny, nz;
 
   MPI_Init(&argc, &argv);
   /* Get the rank for this process, and the number of processes */
@@ -80,66 +78,95 @@ int main(int argc, char ** argv)
   printf("Grid initialised\n");
   
   /* Set the inital guess at the solution */
-    grid_initial_guess( &g );
+  grid_initial_guess( &g );
 
-    /* Set the boundary conditions */
-    grid_set_boundary( &g );
+  /* Set the boundary conditions */
+  grid_set_boundary( &g );
     
-    MPI_Barrier(MPI_COMM_WORLD);
-    
-  if( error == 0 ) {
-    
+  MPI_Barrier(MPI_COMM_WORLD);
+  
+  if (rank == 0)
+  {
+  	start = timer();
+  }
 
-    /* Loop updating the grid until the change is sufficently small to consider
-       the calculation converged */
-    start = timer();
-    converged = 0;
-    for( i = 1; i <= max_iter; i++ ){
-      dg = grid_update( &g );
-      /* Periodic report of the calculation's status */
-      if( ( i == 1 || i%10 == 0 ) || dg < tol ) {
-	fprintf( stdout, "Iter %5i Max change %20.12f\n", i, dg );
-      }
-      if( dg < tol ) {
-	converged = 1;
-	break;
-      }
+  /* Loop updating the grid until the change is sufficently small to consider
+   the calculation converged */
+  converged = 0;
+
+  for(i = 1; i <= max_iter; i++ )
+  {
+  	/* Do the actual update */
+	dg = grid_update( &g );
 	
-    }
-    finish = timer();
+	/* Pass the maximum change (returned from grid_update) back to the root process
+	so that it can then check to see if it is smaller than the tolerance */
+	MPI_Reduce(&dg, &max_dg, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+	
+	/* On the root process ONLY, decide whether we've converged */
+	if (rank == 0)
+	{
+		if (max_dg < tol)
+		{
+			converged = 1;
+		}
+	}
+	
+	/* Send a value to all of the processes to say if we've converged or not */
+	MPI_Bcast(&converged, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	
+	/* If we have, then exit the loop (all processes will do this) */
+	if (converged == 1)
+	{
+		break;
+	}
+	
+	
+  	/* Periodic report of the calculation's status */
+  	if( ( i == 1 || i%10 == 0 ) || dg < tol )
+  	{
+		fprintf( stdout, "Iter %5i Max change %20.12f\n", i, dg );
+  	}
+  	
+  }
 
-    /* Add up all the grid points - can be used as a simple
+  if (rank == 0)
+  {
+	finish = timer();
+  }
+
+  /* Add up all the grid points - can be used as a simple
      check that things have worked */
-    check = grid_checksum( g );
+  check = grid_checksum( g );
 
-    /* Report what happened */
-    fprintf( stdout, "\n" );
-    if( converged ) {
-      fprintf( stdout, "The calculation converged\n" );
-    }
-    else{
-      fprintf( stdout, "The calculation FAILED to converged\n" );
-    }
-    fprintf( stdout, "\n" );
-    fprintf( stdout, "The calculation took %f seconds\n", finish - start );
-    fprintf( stdout, "The check sum of the grid is %20.12g\n", check );
-    fprintf( stdout, "\n" );
-    grid_print_times( g );
+  /* Sum all of the sub-checksums */
+  MPI_Reduce(&check, &total_check, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
-    /* finalise the grid */
-    grid_finalize( &g );
-
-    /* Calculation worked so tell the world */
-    retval = EXIT_SUCCESS;
-
+  /* Print the results only if we're the root process */
+  if (rank == 0)
+  {
+	/* Report what happened */
+	fprintf( stdout, "\n" );
+	if( converged ) {
+	  fprintf( stdout, "The calculation converged\n" );
+	}
+	else{
+	  fprintf( stdout, "The calculation FAILED to converged\n" );
+	}
+	fprintf( stdout, "\n" );
+	fprintf( stdout, "The calculation took %f seconds\n", finish - start );
+	fprintf( stdout, "The check sum of the grid is %20.12g\n", total_check );
+	fprintf( stdout, "\n" );
+	/*grid_print_times( g );*/
   }
 
-  else{
-    fprintf( stdout, "Error: Failed to initialize the grid\n"
-	     "This is probably because there is insufficient memory\n" );
-  }
+  /* finalise the grid */
+  grid_finalize( &g );
 
+  /* Calculation worked so tell the world */
+  retval = EXIT_SUCCESS;
+
+  
   MPI_Finalize();
   return retval;
-
 }
