@@ -13,9 +13,9 @@ cd $PBS_O_WORKDIR     # Change to directory from
                       # which job was submitted
                       
 ./laplace <<END
-500
-500
-500
+200
+200
+200
 0.01
 100
 END

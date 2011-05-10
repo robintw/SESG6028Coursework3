@@ -1,4 +1,7 @@
 #!/bin/bash
+
+export OMP_NUM_THREADS=4
+
 ./laplace <<END
 200
 200

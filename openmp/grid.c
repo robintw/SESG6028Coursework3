@@ -171,7 +171,9 @@ double grid_update( struct grid *g ){
   int lb0, lb1, lb2, ub0, ub1, ub2;
   int i, j, k;
   
-  int tid;
+  double *max_values;
+  double max_dg;
+  int num_threads, thread_num;
 
   /* Work out which version of the grid hold the current values, and
      which we will write the update into */
@@ -199,28 +201,51 @@ double grid_update( struct grid *g ){
   ub1 = g->ng[ 1 ] - 2;
   ub2 = g->ng[ 2 ] - 2;
 
+
   /* Perform the update and check for convergence  */
   start = timer();
-  dg = 0.0;
-  #pragma omp parallel
+  
+#pragma omp parallel default(none) private(i, j, k, dg, diff, thread_num) shared(num_threads, lb0, ub0, lb1, ub1, lb2, ub2, current, update, g, max_values)
   {
-	  #pragma omp for private(i, j, k)
-	  for( i = lb0; i <= ub0; i++ ) {
-		for( j = lb1; j <= ub1; j++ ) {
-		  for( k = lb2; k <= ub2; k++ ) {
-		g->data[ update ][ i ][ j ][ k ] = 
-		  ONE_SIXTH * ( g->data[ current ][ i + 1 ][ j     ][ k     ] +
-				g->data[ current ][ i - 1 ][ j     ][ k     ] +
-				g->data[ current ][ i     ][ j + 1 ][ k     ] +
-				g->data[ current ][ i     ][ j - 1 ][ k     ] +
-				g->data[ current ][ i     ][ j     ][ k + 1 ] +
-				g->data[ current ][ i     ][ j     ][ k - 1 ] );
-		diff = fabs( g->data[ update ][ i ][ j ][ k ] - g->data[ current ][ i ][ j ][ k ] );
-		dg = dg > diff ? dg : diff;
-		  }
-		}
-	  }
+    dg = 0.0;
+    thread_num = omp_get_thread_num();
+    num_threads = omp_get_num_threads();
+
+    #pragma omp single
+    {
+      max_values = alloc_1d_double(num_threads);
+    
+    }
+    
+#pragma omp for 
+    for( i = lb0; i <= ub0; i++ ) {
+      for( j = lb1; j <= ub1; j++ ) {
+	for( k = lb2; k <= ub2; k++ ) {
+	  g->data[ update ][ i ][ j ][ k ] = 
+	    ONE_SIXTH * ( g->data[ current ][ i + 1 ][ j     ][ k     ] +
+			  g->data[ current ][ i - 1 ][ j     ][ k     ] +
+			  g->data[ current ][ i     ][ j + 1 ][ k     ] +
+			  g->data[ current ][ i     ][ j - 1 ][ k     ] +
+			  g->data[ current ][ i     ][ j     ][ k + 1 ] +
+			  g->data[ current ][ i     ][ j     ][ k - 1 ] );
+	  diff = fabs( g->data[ update ][ i ][ j ][ k ] - g->data[ current ][ i ][ j ][ k ] );
+	  dg = dg > diff ? dg : diff;
+	}
+      }
+    }
+    max_values[thread_num] = dg;
   }
+  
+  max_dg = 0.0;
+  for (i = 0; i < num_threads; i++)
+    {
+      printf("Max val %d = %f\n", i, max_values[i]);
+      if (max_values[i] > max_dg)
+	{
+	  max_dg = max_values[i];
+	}
+    }
+
   finish = timer();
   g->t_iter += finish - start;
 
@@ -230,7 +255,7 @@ double grid_update( struct grid *g ){
   /* The updated grid is now the current grid, so swap over */
   g->current = update;
 
-  return dg;
+  return max_dg;
 
 }
 

@@ -53,9 +53,9 @@ int grid_init( int ng[ 3 ], struct grid *g )
   /* Create the cartesian communicator with the sizes of the processor grid
   Set all dimensions to be NON-PERIODIC as we don't need/want to loop back across the grid
   as we have to not update the dimensions anyway! */
-  dim_size[0] = npx;
-  dim_size[1] = npy;
-  dim_size[2] = npz;
+  dim_size[0] = g->npz;
+  dim_size[1] = g->npy;
+  dim_size[2] = g->npx;
   periods[0] = 0;
   periods[1] = 0;
   periods[2] = 0;
@@ -69,28 +69,28 @@ int grid_init( int ng[ 3 ], struct grid *g )
   MPI_Cart_coords(cart_comm, rank, 3, coords);
   
   /* Who are my neighbours in each direction? */
-  MPI_Cart_shift( cart_comm, 1, 1, &g->north, &g->south    );
-  MPI_Cart_shift( cart_comm, 0, 1, &g->west, &g->east );
-  MPI_Cart_shift( cart_comm, 2, 1, &g->up, &g->down );
+  MPI_Cart_shift( cart_comm, 2, 1, &g->north, &g->south    );
+  MPI_Cart_shift( cart_comm, 1, 1, &g->west, &g->east );
+  MPI_Cart_shift( cart_comm, 0, 1, &g->up, &g->down );
 
   g->nx = ceil(ng[0] / (float) npx);
   g->ny = ceil(ng[1] / (float) npy);
   g->nz = ceil(ng[2] / (float) npz);
 		
-  if (coords[0] == (npx - 1))
+  if (coords[0] == (npz - 1))
   {
-		/* We're at the far end of x */
-		g->nx = ng[0] - (g->nx * (npx - 1));
+		/* We're at the far end of z */
+		g->nz = ng[0] - (g->nz * (npz - 1));
   }
   if (coords[1] == (npy - 1))
   {
 		/* We're at the far end of y */
 		g->ny = ng[1] - (g->ny * (npy - 1));
   }
-  if (coords[2] == (npz - 1))
+  if (coords[2] == (npx - 1))
   {
-		/* We're at the far end of z */
-		g->nz = ng[2] - (g->nz * (npz - 1));
+		/* We're at the far end of x */
+		g->nx = ng[2] - (g->nx * (npx - 1));
   }
   
   /* Store the coords in the g structure */
@@ -98,13 +98,13 @@ int grid_init( int ng[ 3 ], struct grid *g )
   g->py = coords[1];
   g->pz = coords[2];
   
-  printf("Rank: %d at location (%d, %d, %d) with sizes %d, %d, %d. N: %d, S: %d, E: %d, W: %d, U: %d, D: %d\n", rank, coords[0], coords[1], coords[2], g->nx, g->ny, g->nz, g->north, g->south, g->east, g->west, g->up, g->down);
+  printf("Rank: %d at location (%d, %d, %d) with sizes x = %d, y = %d, z = %d. N: %d, S: %d, E: %d, W: %d, U: %d, D: %d\n", rank, coords[0], coords[1], coords[2], g->nx, g->ny, g->nz, g->north, g->south, g->east, g->west, g->up, g->down);
 
   /* Allocate the grid. Note we will need two versions of the data on the grid, one to hold
      the current values, and one to write the results into when we are updating the grid. We swap between
      the two versions as we go from iteration to iteration, the 'current' member of the derived type
      indicating which version is the most up to date.
-     
+      
      We're making the array 2 cells bigger in each dimension so that we have a spare cell at the end of every row etc. so that we
      can send and receive into/from that extra bit. */
 
@@ -308,6 +308,12 @@ double grid_update( struct grid *g ) {
 
   int current, update;
   int i, j, k;
+  
+  int tag, rank;
+  
+  MPI_Request send_req, recv_req;
+  MPI_Request requests[100];
+  int req_num = 0;
 
   /* Work out which version of the grid hold the current values, and
      which we will write the update into */
@@ -331,11 +337,55 @@ double grid_update( struct grid *g ) {
   dg = 0.0;
   
   /* Get the neighbouring faces from the grid neighbours */
+   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+  if (g->west >= 0)
+  {
+  	tag = (g->west + 1) * (rank + 1);
+  }
+  else
+  {
+  	tag = 0;
+  }
   
   /* Exchange for the western face of the chunk */
-  printf("Doing exchange for WEST: Send to %d. Receive from %d\n", g->west, g->west);
-  MPI_Sendrecv(&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, 0,
-  		&g->data[current][g->nz-1][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  printf("Send: From %d to %d. Tag = %d. Size = %d\n", rank, g->west, tag, g->nx*g->ny);
+  MPI_Isend(&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, tag, MPI_COMM_WORLD, &send_req);
+  printf("Recv: At %d from %d. Tag = %d. Size = %d\n", rank, g->west, tag, g->nx*g->ny);
+  MPI_Irecv(&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, tag, MPI_COMM_WORLD, &recv_req);
+  /* MPI_Sendrecv(&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, tag,
+  		&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE); */
+  
+  requests[req_num] = send_req;
+  requests[req_num+1] = recv_req;
+  
+  req_num += 2;
+  
+  if (g->east >= 0)
+  {
+  	tag = (g->east + 1) * (rank + 1);
+  }
+  else
+  {
+  	tag = 0;
+  }		
+  
+  printf("Send: From %d to %d. Tag = %d. Size = %d\n", rank, g->east, tag, g->nx*g->ny);
+  MPI_Isend(&g->data[current][g->nz-1][0][0], g->nx*g->ny, MPI_DOUBLE, g->east, tag, MPI_COMM_WORLD, &send_req);
+  printf("Recv: At %d from %d. Tag = %d. Size = %d\n", rank, g->east, tag, g->nx*g->ny);
+  MPI_Irecv(&g->data[current][g->nz-1][0][0], g->nx*g->ny, MPI_DOUBLE, g->east, tag, MPI_COMM_WORLD, &recv_req);
+  
+  requests[req_num] = send_req;
+  requests[req_num+1] = recv_req;
+  
+  req_num += 2;
+  
+  
+  /* MPI_Sendrecv(&g->data[current][g->nz-1][0][0], g->nx*g->ny, MPI_DOUBLE, g->east, tag,
+  		&g->data[current][g->nz-1][0][0], g->nx*g->ny, MPI_DOUBLE, g->east, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE); */
+  
+  printf("Waiting...\n");
+  MPI_Waitall(req_num, requests, MPI_STATUSES_IGNORE);
   
   /* Loop through and do the calculations */
   for( i = g->lb_x; i <= g->ub_x; i++ )
