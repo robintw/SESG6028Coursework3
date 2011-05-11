@@ -439,6 +439,56 @@ double grid_update( struct grid *g ) {
   printf("Waiting...\n");
   MPI_Waitall(req_num, requests, MPI_STATUSES_IGNORE);
   
+    /* Exchange Up/Down faces */
+  req_num = 0;
+  MPI_Type_vector(g->nz, g->nx, g->nx * g->ny, MPI_DOUBLE, &face);
+  MPI_Type_commit(&face);
+  
+  if (g->up >= 0)
+  {
+  	tag = (g->up + 1) * (rank + 1);
+  }
+  else
+  {
+  	tag = 0;
+  }
+  
+  /* Exchange for the up  face of the chunk */
+  /* printf("Send: From %d to %d. Tag = %d. Size = %d\n", rank, g->west, tag, g->nx*g->ny); */
+  MPI_Isend(&g->data[current][0][0][0], 1, face, g->up, tag, MPI_COMM_WORLD, &send_req);
+  /* printf("Recv: At %d from %d. Tag = %d. Size = %d\n", rank, g->west, tag, g->nx*g->ny); */
+  MPI_Irecv(&g->data[current][0][0][0], 1, face, g->up, tag, MPI_COMM_WORLD, &recv_req);
+  /* MPI_Sendrecv(&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, tag,
+  		&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE); */
+  
+  requests[req_num] = send_req;
+  requests[req_num+1] = recv_req;
+  
+  req_num += 2;
+  
+  if (g->down >= 0)
+  {
+  	tag = (g->down + 1) * (rank + 1);
+  }
+  else
+  {
+  	tag = 0;
+  }		
+  
+  /* printf("Send: From %d to %d. Tag = %d. Size = %d\n", rank, g->east, tag, g->nx*g->ny); */
+  MPI_Isend(&g->data[current][0][g->ny-1][0], 1, face, g->down, tag, MPI_COMM_WORLD, &send_req);
+  /* printf("Recv: At %d from %d. Tag = %d. Size = %d\n", rank, g->east, tag, g->nx*g->ny); */
+  MPI_Irecv(&g->data[current][0][g->ny-1][0], 1, face, g->down, tag, MPI_COMM_WORLD, &recv_req);
+  
+  requests[req_num] = send_req;
+  requests[req_num+1] = recv_req;
+  
+  req_num += 2;
+  
+  printf("Waiting...\n");
+  MPI_Waitall(req_num, requests, MPI_STATUSES_IGNORE);
+  
+  
   
   
   /* Loop through and do the calculations */

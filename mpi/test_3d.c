@@ -4,20 +4,14 @@
 
 #include "array_alloc.h"
 
-void print_data(int *start, int number, int blocklen, int stride)
+void print_data(int *start, int count, int blocklen, int stride)
 {
 	int i, j;
 	int *curr;
 	
-// 	for(i = 0; i < number; i++)
-// 	{
-// 		printf("%d ", *start+(i * stride));
-// 		printf("\n");
-// 	}
-
 	curr = start;
 	
-	for(i = 0; i < number; i++)
+	for(i = 0; i < count; i++)
 	{
 		for(j = 0; j < blocklen; j++)
 		{
@@ -25,7 +19,8 @@ void print_data(int *start, int number, int blocklen, int stride)
 			curr++;
 		}
 		printf("\n");
-		curr += (stride - 1);
+		curr -= j;
+		curr += stride;
 	}
 }
 
@@ -58,6 +53,6 @@ int main(int argc, char ** argv)
 	
 	printf("Using count = %d, blocklength = %d and stride = %d\n", a, b, c);
 	
-	print_data(&data[0][0][0], a, b, c);
+	print_data(&data[0][2][0], a, b, c);
 	
 }
