@@ -314,6 +314,8 @@ double grid_update( struct grid *g ) {
   MPI_Request send_req, recv_req;
   MPI_Request requests[100];
   int req_num = 0;
+  
+  MPI_Datatype face;
 
   /* Work out which version of the grid hold the current values, and
      which we will write the update into */
@@ -380,12 +382,64 @@ double grid_update( struct grid *g ) {
   
   req_num += 2;
   
+  printf("Waiting...\n");
+  MPI_Waitall(req_num, requests, MPI_STATUSES_IGNORE);
   
-  /* MPI_Sendrecv(&g->data[current][g->nz-1][0][0], g->nx*g->ny, MPI_DOUBLE, g->east, tag,
-  		&g->data[current][g->nz-1][0][0], g->nx*g->ny, MPI_DOUBLE, g->east, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE); */
+  
+  
+  
+  
+  
+  /* Exchange North/South faces */
+  req_num = 0;
+  MPI_Type_vector(2*g->ny, 1, g->nx, MPI_DOUBLE, &face);
+  MPI_Type_commit(&face);
+  
+  if (g->north >= 0)
+  {
+  	tag = (g->north + 1) * (rank + 1);
+  }
+  else
+  {
+  	tag = 0;
+  }
+  
+  /* Exchange for the northern face of the chunk */
+  /* printf("Send: From %d to %d. Tag = %d. Size = %d\n", rank, g->west, tag, g->nx*g->ny); */
+  MPI_Isend(&g->data[current][0][0][0], 1, face, g->north, tag, MPI_COMM_WORLD, &send_req);
+  /* printf("Recv: At %d from %d. Tag = %d. Size = %d\n", rank, g->west, tag, g->nx*g->ny); */
+  MPI_Irecv(&g->data[current][0][0][0], 1, face, g->north, tag, MPI_COMM_WORLD, &recv_req);
+  /* MPI_Sendrecv(&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, tag,
+  		&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE); */
+  
+  requests[req_num] = send_req;
+  requests[req_num+1] = recv_req;
+  
+  req_num += 2;
+  
+  if (g->south >= 0)
+  {
+  	tag = (g->south + 1) * (rank + 1);
+  }
+  else
+  {
+  	tag = 0;
+  }		
+  
+  /* printf("Send: From %d to %d. Tag = %d. Size = %d\n", rank, g->east, tag, g->nx*g->ny); */
+  MPI_Isend(&g->data[current][0][0][g->nx-1], 1, face, g->south, tag, MPI_COMM_WORLD, &send_req);
+  /* printf("Recv: At %d from %d. Tag = %d. Size = %d\n", rank, g->east, tag, g->nx*g->ny); */
+  MPI_Irecv(&g->data[current][0][0][g->nx-1], 1, face, g->south, tag, MPI_COMM_WORLD, &recv_req);
+  
+  requests[req_num] = send_req;
+  requests[req_num+1] = recv_req;
+  
+  req_num += 2;
   
   printf("Waiting...\n");
   MPI_Waitall(req_num, requests, MPI_STATUSES_IGNORE);
+  
+  
   
   /* Loop through and do the calculations */
   for( i = g->lb_x; i <= g->ub_x; i++ )
@@ -425,9 +479,9 @@ double grid_checksum( struct grid g ){
   int i, j, k;
 
   sum = 0.0;
-  for( i = 1; i < g.ng[ 0 ] - 1; i++ ) {
-    for( j = 1; j < g.ng[ 1 ] - 1; j++ ) {
-      for( k = 1; k < g.ng[ 2 ] - 1; k++ ) {
+  for( i = 1; i < g.nz - 1; i++ ) {
+    for( j = 1; j < g.ny - 1; j++ ) {
+      for( k = 1; k < g.nx - 1; k++ ) {
 	sum += g.data[ g.current ][ i ][ j ][ k ];
       }
     }

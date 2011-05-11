@@ -106,6 +106,7 @@ int main(int argc, char ** argv)
 	/* On the root process ONLY, decide whether we've converged */
 	if (rank == 0)
 	{
+		printf("!!!!! max_dg = %f\n", max_dg);
 		if (max_dg < tol)
 		{
 			converged = 1;
