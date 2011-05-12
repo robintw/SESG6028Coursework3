@@ -205,18 +205,25 @@ double grid_update( struct grid *g ){
   /* Perform the update and check for convergence  */
   start = timer();
   
+  /* Start a parellel region. Make everything shared apart from the loop indices (i, j, k), the differences and the unique thread number */
 #pragma omp parallel default(none) private(i, j, k, dg, diff, thread_num) shared(num_threads, lb0, ub0, lb1, ub1, lb2, ub2, current, update, g, max_values)
   {
+  	/* Initialise the difference to zero */
     dg = 0.0;
+    
+    /* Get the current thread number, and the total number of threads */
     thread_num = omp_get_thread_num();
     num_threads = omp_get_num_threads();
 
+	/* One thread ONLY initialises the array to hold the maximum values */
     #pragma omp single
     {
       max_values = alloc_1d_double(num_threads);
     
     }
     
+/* Parallelise this loop, without dynamic scheduling (not needed as each iteration should take
+the same time) */
 #pragma omp for 
     for( i = lb0; i <= ub0; i++ ) {
       for( j = lb1; j <= ub1; j++ ) {
@@ -233,18 +240,20 @@ double grid_update( struct grid *g ){
 	}
       }
     }
+    /* Put the maximum value found by this thread in the array of maximum values */
     max_values[thread_num] = dg;
   }
   
+  /* Now we've got the maximum values from each thread and we want to find the overall
+  maximum value. Simply loop through checking each one */
   max_dg = 0.0;
   for (i = 0; i < num_threads; i++)
-    {
-      printf("Max val %d = %f\n", i, max_values[i]);
+  {
       if (max_values[i] > max_dg)
-	{
-	  max_dg = max_values[i];
-	}
-    }
+	  {
+	  	max_dg = max_values[i];
+	  }
+  }
 
   finish = timer();
   g->t_iter += finish - start;
@@ -255,6 +264,7 @@ double grid_update( struct grid *g ){
   /* The updated grid is now the current grid, so swap over */
   g->current = update;
 
+  /* Return the maximum dg value found */
   return max_dg;
 
 }

@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include<omp.h>
 
 #include "grid.h"
 #include "timer.h"
@@ -25,9 +24,7 @@ int main( void ){
   int converged;
   int retval;
   int i;
-  int num;
-  int tot;
-	
+
   /* Ever the optimist ... Assume the code has failed until we see otherwise */
   retval = EXIT_FAILURE;
 
@@ -67,33 +64,24 @@ int main( void ){
 
     /* Set the boundary conditions */
     grid_set_boundary( &g );
-    
-    printf("Outside everything: max_iter = %d\n", max_iter);    
-        start = timer();
 
-	converged = 0;
-		/* Loop updating the grid until the change is sufficently small to consider
-		   the calculation converged */
-		
-		for( i = 1; i <= max_iter; i++ ){
-		  num = omp_get_thread_num();
-		  tot = omp_get_num_threads();
-		  printf("Doing iteration %d of %d on thread %d\n", i, max_iter, num);
-		  printf("max_iter = %d, tol = %f\n", max_iter, tol);
-		  dg = grid_update( &g );
-		  printf("Got dg = %f\n", dg);
-		  /* Periodic report of the calculation's status */
-		  if( ( i == 1 || i%10 == 0 ) || dg < tol ) {
-			fprintf( stdout, "Iter %5i Max change %20.12f\n", i, dg ); 
-		  }
-		  if( dg < tol ) {
-			printf("I'm saying it converged: dg = %f, tol = %f\n", dg, tol);
-			converged = 1;
-			break;
-		  }
-		  printf("At end of for loop\n");
-		}
-        finish = timer();
+    /* Loop updating the grid until the change is sufficently small to consider
+       the calculation converged */
+    start = timer();
+    converged = 0;
+    for( i = 1; i <= max_iter; i++ ){
+      dg = grid_update( &g );
+      /* Periodic report of the calculation's status */
+      /*if( ( i == 1 || i%10 == 0 ) || dg < tol ) {*/
+	fprintf( stdout, "Iter %5i Max change %20.12f\n", i, dg );
+      /*}*/
+      if( dg < tol ) {
+	converged = 1;
+	break;
+      }
+	
+    }
+    finish = timer();
 
     /* Add up all the grid points - can be used as a simple
      check that things have worked */
