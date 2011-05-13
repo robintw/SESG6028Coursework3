@@ -126,7 +126,6 @@ int grid_init( int ng[ 3 ], struct grid *g )
   g->t_iter = 0.0;
   g->n_iter = 0;
 
-  printf("Returning\n");
   return EXIT_SUCCESS;
 
 }
@@ -290,7 +289,6 @@ void grid_set_boundary( struct grid *g )
 		g->ub_z = (g->nz - 2);
 	}
 	
-	printf("Finished grid_set_boundary\n");
 }
 
 double grid_update( struct grid *g ) {
@@ -391,10 +389,6 @@ double grid_update( struct grid *g ) {
 		g->data[ current ][ i     ][ j     ][ k + 1 ] +
 		g->data[ current ][ i     ][ j     ][ k - 1 ] );
 		diff = fabs( g->data[ update ][ i ][ j ][ k ] - g->data[ current ][ i ][ j ][ k ] );
-		if (diff > 1)
-		{
-			printf("Old value = %f. New value = %f. Diff = %f\n", g->data[current][i][j][k], g->data[update][i][j][k], diff);
-		}
 		dg = dg > diff ? dg : diff;
       }
     }
