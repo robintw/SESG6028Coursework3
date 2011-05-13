@@ -339,152 +339,38 @@ double grid_update( struct grid *g ) {
 
   MPI_Type_vector(g->ny, g->nx, g->nx, MPI_DOUBLE, &face);
   MPI_Type_commit(&face);
+  
+  tag = 0;
 
-  if (g->west >= 0)
-  {
-  	tag = (g->west + 1) * (rank + 1);
-  }
-  else
-  {
-  	tag = 0;
-  }
-  
   /* Exchange for the western face of the chunk */
-  /*printf("Send: From %d to %d. Tag = %d. Size = %d\n", rank, g->west, tag, g->nx*g->ny);*/
-  MPI_Isend(&g->data[current][0][0][0], 1, face, g->west, tag, MPI_COMM_WORLD, &send_req);
-  /*printf("Recv: At %d from %d. Tag = %d. Size = %d\n", rank, g->west, tag, g->nx*g->ny);*/
-  MPI_Irecv(&g->data[current][0][0][0], 1, face, g->west, tag, MPI_COMM_WORLD, &recv_req);
-  /* MPI_Sendrecv(&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, tag,
-  		&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE); */
+  MPI_Sendrecv(&g->data[current][0][0][0], 1, face, g->west, tag,
+  		&g->data[current][0][0][0], 1, face, g->east, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   
-  requests[req_num] = send_req;
-  requests[req_num+1] = recv_req;
-  
-  req_num += 2;
-  
-  if (g->east >= 0)
-  {
-  	tag = (g->east + 1) * (rank + 1);
-  }
-  else
-  {
-  	tag = 0;
-  }		
-  
-  /*printf("Send: From %d to %d. Tag = %d. Size = %d\n", rank, g->east, tag, g->nx*g->ny);*/
-  MPI_Isend(&g->data[current][g->nz-1][0][0], 1, face, g->east, tag, MPI_COMM_WORLD, &send_req);
-  /*printf("Recv: At %d from %d. Tag = %d. Size = %d\n", rank, g->east, tag, g->nx*g->ny);*/
-  MPI_Irecv(&g->data[current][g->nz-1][0][0], 1, face, g->east, tag, MPI_COMM_WORLD, &recv_req);
-  
-  requests[req_num] = send_req;
-  requests[req_num+1] = recv_req;
-  
-  req_num += 2;
-  
-  /*printf("Waiting...\n");*/
-  MPI_Waitall(req_num, requests, MPI_STATUSES_IGNORE);
-  
-  
-  
-  
+  MPI_Sendrecv(&g->data[current][g->nz-1][0][0], 1, face, g->east, tag,
+  		&g->data[current][g->nz-1][0][0], 1, face, g->west, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   
   
   /* Exchange North/South faces */
-  req_num = 0;
   MPI_Type_vector(2*g->ny, 1, g->nx, MPI_DOUBLE, &face);
   MPI_Type_commit(&face);
-  
-  if (g->north >= 0)
-  {
-  	tag = (g->north + 1) * (rank + 1);
-  }
-  else
-  {
-  	tag = 0;
-  }
-  
+    
   /* Exchange for the northern face of the chunk */
-  /* printf("Send: From %d to %d. Tag = %d. Size = %d\n", rank, g->west, tag, g->nx*g->ny); */
-  MPI_Isend(&g->data[current][0][0][0], 1, face, g->north, tag, MPI_COMM_WORLD, &send_req);
-  /* printf("Recv: At %d from %d. Tag = %d. Size = %d\n", rank, g->west, tag, g->nx*g->ny); */
-  MPI_Irecv(&g->data[current][0][0][0], 1, face, g->north, tag, MPI_COMM_WORLD, &recv_req);
-  /* MPI_Sendrecv(&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, tag,
-  		&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE); */
+  MPI_Sendrecv(&g->data[current][0][0][0], 1, face, g->north, tag,
+  		&g->data[current][0][0][0], 1, face, g->south, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   
-  requests[req_num] = send_req;
-  requests[req_num+1] = recv_req;
-  
-  req_num += 2;
-  
-  if (g->south >= 0)
-  {
-  	tag = (g->south + 1) * (rank + 1);
-  }
-  else
-  {
-  	tag = 0;
-  }		
-  
-  /* printf("Send: From %d to %d. Tag = %d. Size = %d\n", rank, g->east, tag, g->nx*g->ny); */
-  MPI_Isend(&g->data[current][0][0][g->nx-1], 1, face, g->south, tag, MPI_COMM_WORLD, &send_req);
-  /* printf("Recv: At %d from %d. Tag = %d. Size = %d\n", rank, g->east, tag, g->nx*g->ny); */
-  MPI_Irecv(&g->data[current][0][0][g->nx-1], 1, face, g->south, tag, MPI_COMM_WORLD, &recv_req);
-  
-  requests[req_num] = send_req;
-  requests[req_num+1] = recv_req;
-  
-  req_num += 2;
-  
-  MPI_Waitall(req_num, requests, MPI_STATUSES_IGNORE);
-  
+  MPI_Sendrecv(&g->data[current][0][0][g->nx-1], 1, face, g->south, tag,
+  		&g->data[current][0][0][g->nx-1], 1, face, g->north, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    
     /* Exchange Up/Down faces */
-  req_num = 0;
   MPI_Type_vector(g->nz, g->nx, g->nx * g->ny, MPI_DOUBLE, &face);
   MPI_Type_commit(&face);
-  
-  if (g->up >= 0)
-  {
-  	tag = (g->up + 1) * (rank + 1);
-  }
-  else
-  {
-  	tag = 0;
-  }
-  
+
   /* Exchange for the up  face of the chunk */
-  /* printf("Send: From %d to %d. Tag = %d. Size = %d\n", rank, g->west, tag, g->nx*g->ny); */
-  MPI_Isend(&g->data[current][0][0][0], 1, face, g->up, tag, MPI_COMM_WORLD, &send_req);
-  /* printf("Recv: At %d from %d. Tag = %d. Size = %d\n", rank, g->west, tag, g->nx*g->ny); */
-  MPI_Irecv(&g->data[current][0][0][0], 1, face, g->up, tag, MPI_COMM_WORLD, &recv_req);
-  /* MPI_Sendrecv(&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, tag,
-  		&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE); */
-  
-  requests[req_num] = send_req;
-  requests[req_num+1] = recv_req;
-  
-  req_num += 2;
-  
-  if (g->down >= 0)
-  {
-  	tag = (g->down + 1) * (rank + 1);
-  }
-  else
-  {
-  	tag = 0;
-  }		
-  
-  /* printf("Send: From %d to %d. Tag = %d. Size = %d\n", rank, g->east, tag, g->nx*g->ny); */
-  MPI_Isend(&g->data[current][0][g->ny-1][0], 1, face, g->down, tag, MPI_COMM_WORLD, &send_req);
-  /* printf("Recv: At %d from %d. Tag = %d. Size = %d\n", rank, g->east, tag, g->nx*g->ny); */
-  MPI_Irecv(&g->data[current][0][g->ny-1][0], 1, face, g->down, tag, MPI_COMM_WORLD, &recv_req);
-  
-  requests[req_num] = send_req;
-  requests[req_num+1] = recv_req;
-  
-  req_num += 2;
-  
-  MPI_Waitall(req_num, requests, MPI_STATUSES_IGNORE);
-  
+  MPI_Sendrecv(&g->data[current][0][0][0], 1, face, g->up, tag,
+  		&g->data[current][0][0][0], 1, face, g->down, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+  MPI_Sendrecv(&g->data[current][0][0][0], 1, face, g->down, tag,
+  		&g->data[current][0][0][0], 1, face, g->up, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   
   if (rank == 5)
   {
