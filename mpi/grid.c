@@ -147,13 +147,11 @@ void grid_initial_guess( struct grid *g )
   /* Initial guess at the solution. We'll use a very simple one ... */
 
   int i, j, k, l;
-
-  printf("Inside grid_initial_guess\n");
   
     for( i = 0; i < 2; i++ ){
-      for( j = 0; j < g->nx - 1; j++ ){
+      for( j = 0; j < g->nz - 1; j++ ){
 	for( k = 0; k < g->ny - 1; k++ ){
-	  for( l = 0; l < g->nz - 1; l++ ){
+	  for( l = 0; l < g->nx - 1; l++ ){
 	    g->data[ i ][ j ][ k ][ l ] = 0.0;
 	  }
 	}
@@ -172,8 +170,6 @@ void grid_set_boundary( struct grid *g )
 
   int i, j, k;
   
-  printf("Inside grid_set_boundary: px = %d / %d, py = %d / %d, pz = %d / %d\n", g->px, g->npx, g->py, g->npy, g->pz, g->npz);
-
   /* Set each face of the cuboid in turn */
   /* Also remember that we need to do do it for both versions */
   
@@ -186,13 +182,13 @@ void grid_set_boundary( struct grid *g )
   them all first to something that will be correct for anything that isn't changed below. */
   
   g->lb_x = 1;
-  g->ub_x = (g->nx - 2);
+  g->ub_x = (g->nx - 1);
   
   g->lb_y = 1;
-  g->ub_y = (g->ny - 2);
+  g->ub_y = (g->ny - 1);
   
   g->lb_z = 1;
-  g->ub_z = (g->nz - 2);
+  g->ub_z = (g->nz - 1);
   
   if (g->px == 0)
   {
@@ -224,7 +220,7 @@ void grid_set_boundary( struct grid *g )
   			}
   		}
   	}
-  	g->ub_x = (g->nx - 3);
+  	g->ub_x = (g->nx - 2);
   }
   	
   	
@@ -258,7 +254,7 @@ void grid_set_boundary( struct grid *g )
 				}
 			}
 		}
-		g->ub_y = (g->ny - 3);
+		g->ub_y = (g->ny - 2);
   	}
   	
   	if (g->pz == 0)
@@ -291,7 +287,7 @@ void grid_set_boundary( struct grid *g )
 				}
 			}
 		}
-		g->ub_z = (g->nz-2);
+		g->ub_z = (g->nz - 2);
 	}
 	
 	printf("Finished grid_set_boundary\n");
@@ -341,6 +337,9 @@ double grid_update( struct grid *g ) {
   /* Get the neighbouring faces from the grid neighbours */
    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+  MPI_Type_vector(g->ny, g->nx, g->nx, MPI_DOUBLE, &face);
+  MPI_Type_commit(&face);
+
   if (g->west >= 0)
   {
   	tag = (g->west + 1) * (rank + 1);
@@ -351,10 +350,10 @@ double grid_update( struct grid *g ) {
   }
   
   /* Exchange for the western face of the chunk */
-  printf("Send: From %d to %d. Tag = %d. Size = %d\n", rank, g->west, tag, g->nx*g->ny);
-  MPI_Isend(&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, tag, MPI_COMM_WORLD, &send_req);
-  printf("Recv: At %d from %d. Tag = %d. Size = %d\n", rank, g->west, tag, g->nx*g->ny);
-  MPI_Irecv(&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, tag, MPI_COMM_WORLD, &recv_req);
+  /*printf("Send: From %d to %d. Tag = %d. Size = %d\n", rank, g->west, tag, g->nx*g->ny);*/
+  MPI_Isend(&g->data[current][0][0][0], 1, face, g->west, tag, MPI_COMM_WORLD, &send_req);
+  /*printf("Recv: At %d from %d. Tag = %d. Size = %d\n", rank, g->west, tag, g->nx*g->ny);*/
+  MPI_Irecv(&g->data[current][0][0][0], 1, face, g->west, tag, MPI_COMM_WORLD, &recv_req);
   /* MPI_Sendrecv(&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, tag,
   		&g->data[current][0][0][0], g->nx*g->ny, MPI_DOUBLE, g->west, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE); */
   
@@ -372,17 +371,17 @@ double grid_update( struct grid *g ) {
   	tag = 0;
   }		
   
-  printf("Send: From %d to %d. Tag = %d. Size = %d\n", rank, g->east, tag, g->nx*g->ny);
-  MPI_Isend(&g->data[current][g->nz-1][0][0], g->nx*g->ny, MPI_DOUBLE, g->east, tag, MPI_COMM_WORLD, &send_req);
-  printf("Recv: At %d from %d. Tag = %d. Size = %d\n", rank, g->east, tag, g->nx*g->ny);
-  MPI_Irecv(&g->data[current][g->nz-1][0][0], g->nx*g->ny, MPI_DOUBLE, g->east, tag, MPI_COMM_WORLD, &recv_req);
+  /*printf("Send: From %d to %d. Tag = %d. Size = %d\n", rank, g->east, tag, g->nx*g->ny);*/
+  MPI_Isend(&g->data[current][g->nz-1][0][0], 1, face, g->east, tag, MPI_COMM_WORLD, &send_req);
+  /*printf("Recv: At %d from %d. Tag = %d. Size = %d\n", rank, g->east, tag, g->nx*g->ny);*/
+  MPI_Irecv(&g->data[current][g->nz-1][0][0], 1, face, g->east, tag, MPI_COMM_WORLD, &recv_req);
   
   requests[req_num] = send_req;
   requests[req_num+1] = recv_req;
   
   req_num += 2;
   
-  printf("Waiting...\n");
+  /*printf("Waiting...\n");*/
   MPI_Waitall(req_num, requests, MPI_STATUSES_IGNORE);
   
   
@@ -436,7 +435,6 @@ double grid_update( struct grid *g ) {
   
   req_num += 2;
   
-  printf("Waiting...\n");
   MPI_Waitall(req_num, requests, MPI_STATUSES_IGNORE);
   
     /* Exchange Up/Down faces */
@@ -485,18 +483,20 @@ double grid_update( struct grid *g ) {
   
   req_num += 2;
   
-  printf("Waiting...\n");
   MPI_Waitall(req_num, requests, MPI_STATUSES_IGNORE);
   
   
-  
+  if (rank == 5)
+  {
+  	printf("Bounds: x %d to %d, y %d to %d, z %d to %d\n", g->lb_x, g->ub_x, g->lb_y, g->ub_y, g->lb_z, g->ub_z);
+  }
   
   /* Loop through and do the calculations */
-  for( i = g->lb_x; i <= g->ub_x; i++ )
+  for( i = g->lb_x; i < g->ub_x; i++ )
   {
-    for( j = g->lb_y; j <= g->ub_y; j++ )
+    for( j = g->lb_y; j < g->ub_y; j++ )
     {
-      for( k = g->lb_z; k <= g->ub_z; k++ )
+      for( k = g->lb_z; k < g->ub_z; k++ )
       {
 		g->data[ update ][ i ][ j ][ k ] = ONE_SIXTH * ( g->data[ current ][ i + 1 ][ j     ][ k     ] +
 		g->data[ current ][ i - 1 ][ j     ][ k     ] +
@@ -505,6 +505,10 @@ double grid_update( struct grid *g ) {
 		g->data[ current ][ i     ][ j     ][ k + 1 ] +
 		g->data[ current ][ i     ][ j     ][ k - 1 ] );
 		diff = fabs( g->data[ update ][ i ][ j ][ k ] - g->data[ current ][ i ][ j ][ k ] );
+		if (diff > 1)
+		{
+			printf("Old value = %f. New value = %f. Diff = %f\n", g->data[current][i][j][k], g->data[update][i][j][k], diff);
+		}
 		dg = dg > diff ? dg : diff;
       }
     }

@@ -25,7 +25,7 @@ int main(int argc, char ** argv)
   int error;
   int converged;
   int retval;
-  int i;
+  int i, j, k, l;
 
   int nprocs;
   int rank;
@@ -82,7 +82,18 @@ int main(int argc, char ** argv)
 
   /* Set the boundary conditions */
   grid_set_boundary( &g );
-    
+  
+  /*for( j = 0; j < g.nz - 1; j++ ){
+	for( k = 0; k < g.ny - 1; k++ ){
+	printf("Process %d: ", rank);
+	  for( l = 0; l < g.nx - 1; l++ ){
+	    printf("%f ", g.data[1][ j ][ k ][ l ]);
+	  }
+	  printf("\n");
+	}
+	printf("\n\n\n");
+      } 
+    */
   MPI_Barrier(MPI_COMM_WORLD);
   
   if (rank == 0)
@@ -98,6 +109,8 @@ int main(int argc, char ** argv)
   {
   	/* Do the actual update */
 	dg = grid_update( &g );
+	
+	printf("Process %d. dg = %f\n", rank, dg);
 	
 	/* Pass the maximum change (returned from grid_update) back to the root process
 	so that it can then check to see if it is smaller than the tolerance */
@@ -119,6 +132,7 @@ int main(int argc, char ** argv)
 	/* If we have, then exit the loop (all processes will do this) */
 	if (converged == 1)
 	{
+		printf("###### We've converged!\n");
 		break;
 	}
 	
