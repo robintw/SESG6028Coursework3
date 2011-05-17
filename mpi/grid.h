@@ -1,4 +1,3 @@
-#include <mpi.h>
 
 /* Include file for grid.c - for more details see there */
 
@@ -13,43 +12,23 @@ struct grid {
   
   double ***data[ 2 ]; /* The (two versions of) the data on the grid */
   int current;         /* Which version of the grid we are currently using */
-  int ng[ 3 ];         /* The size of the grid */
+  int whole_size[ 3 ];         /* The size of the overall grid */
+  
+  int nx, ny, nz; /* The size of the chunk given to this process */
+  int nux, nuy, nuz; /* The actual usable dimensions of this chunk - ignoring the edge bits used for halos/boundaries */
+  
+  int px, py, pz; /* Positions in the grid */
+  int npx, npy, npz; /* Number of processors in the grid */
+  
+  int up_x, down_x, up_y, down_y, up_z, down_z; /* Neighbours */
+  
   int n_iter;          /* The number of iterations */
   double t_iter;       /* The time in the iterations */
-  MPI_Comm cart_comm;
-  
-  int npx;
-  int npy;
-  int npz;
-  
-  int nx;
-  int ny;
-  int nz;
-  
-  int px;
-  int py;
-  int pz;
-  
-  int north;
-  int south;
-  int east;
-  int west;
-  int up;
-  int down;
-  
-  int ub_x;
-  int lb_x;
-  
-  int ub_y;
-  int lb_y;
-  
-  int ub_z;
-  int lb_z;
 
 };
 
 /* The prototypes */
-int grid_init( int ng[ 3 ], struct grid *g );    /* Initialise the grid */
+int grid_init( int ng[ 3 ], int npx, int npy, int npz, struct grid *g );    /* Initialise the grid */
 void grid_finalize( struct grid *g );            /* Finalise the grid   */ 
 void grid_initial_guess( struct grid *g );       /* The initial guess at the solution */
 void grid_set_boundary( struct grid *g );        /* Set the bondary conditions */

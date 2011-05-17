@@ -102,11 +102,12 @@ int main( void ){
     grid_print_times( g );
 
     /* finalise the grid */
-    grid_finalize( &g );
+    grid_finalize( &g ); 
 
     /* Calculation worked so tell the world */
     retval = EXIT_SUCCESS;
 
+	printf("%d %f %f\n", 1, finish - start, check);
   }
 
   else{

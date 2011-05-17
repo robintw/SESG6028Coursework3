@@ -72,9 +72,9 @@ int main( void ){
     for( i = 1; i <= max_iter; i++ ){
       dg = grid_update( &g );
       /* Periodic report of the calculation's status */
-      if( ( i == 1 || i%10 == 0 ) || dg < tol ) {
+      /*if( ( i == 1 || i%10 == 0 ) || dg < tol ) {*/
 	fprintf( stdout, "Iter %5i Max change %20.12f\n", i, dg );
-      }
+      /*}*/
       if( dg < tol ) {
 	converged = 1;
 	break;
@@ -107,6 +107,7 @@ int main( void ){
     /* Calculation worked so tell the world */
     retval = EXIT_SUCCESS;
 
+	printf("%d %f %f\n", 1, finish - start, check);
   }
 
   else{

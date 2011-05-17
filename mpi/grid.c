@@ -19,43 +19,36 @@ Written by I.J.Bush March 2011 - if it breaks your computer or aught else, tough
 #include "timer.h"
 #include <mpi.h>
 
-int grid_init( int ng[ 3 ], struct grid *g )
+int grid_init( int ng[ 3 ], int npx, int npy, int npz, struct grid *g )
 {
 
   /* Initialise the grid 
      Arguments are:
      ng        - The total number of points in the grid
+     npx	   - The number of processes in the X direction
+     npy	   - The number of processes in the Y direction
+     npz	   - The number of processes in the Z direction
      grid      - The derived type holding all the data about the grid
 
   */
 
   int i;
-  int dim_size[3];
-  int periods[3];
-  int coords[3];
-  int npx = 3;
-  int npy = 2;
-  int npz = 1;
+  
   int rank;
-  
-  MPI_Comm cart_comm; 
-  /* Calculate the dimensions of the process grid to use */
-  
-    /* Store the size of the full grid */
+  int periods[3];
+  int dim_size[3];
+  int coords[3];
+
+  MPI_Comm cart_comm;
+
+  /* Store the size of the whole grid */
   for( i = 0; i < 3; i++ ){
-    g->ng[ i ] = ng[ i ];
+    g->whole_size[ i ] = ng[ i ];
   }
   
-  g->npx = npx;
-  g->npy = npy;
-  g->npz = npz;
-  
-  /* Create the cartesian communicator with the sizes of the processor grid
-  Set all dimensions to be NON-PERIODIC as we don't need/want to loop back across the grid
-  as we have to not update the dimensions anyway! */
-  dim_size[0] = g->npz;
-  dim_size[1] = g->npy;
-  dim_size[2] = g->npx;
+  dim_size[0] = npz;
+  dim_size[1] = npy;
+  dim_size[2] = npx;
   periods[0] = 0;
   periods[1] = 0;
   periods[2] = 0;
@@ -67,55 +60,64 @@ int grid_init( int ng[ 3 ], struct grid *g )
 	
   /* Get our co-ordinates within that communicator */
   MPI_Cart_coords(cart_comm, rank, 3, coords);
+    
+  /* Calculate how large a chunk we've got here - this is the size of the chunk that we actually
+  want to be able use - so nux, nuy and nuz
   
-  /* Who are my neighbours in each direction? */
-  MPI_Cart_shift( cart_comm, 2, 1, &g->north, &g->south    );
-  MPI_Cart_shift( cart_comm, 1, 1, &g->west, &g->east );
-  MPI_Cart_shift( cart_comm, 0, 1, &g->up, &g->down );
-
-  g->nx = ceil(ng[0] / (float) npx);
-  g->ny = ceil(ng[1] / (float) npy);
-  g->nz = ceil(ng[2] / (float) npz);
-		
+  - 2 because of the boundary conditions */
+  
+  g->whole_size[0] = g->whole_size[0] - 2;
+  g->whole_size[1] = g->whole_size[1] - 2;
+  g->whole_size[2] = g->whole_size[2] - 2;
+  
+  g->nuz = ceil(g->whole_size[0] / (float) npz);
+  g->nuy = ceil(g->whole_size[1] / (float) npy);
+  g->nux = ceil(g->whole_size[2]/ (float) npx);
+  
   if (coords[0] == (npz - 1))
   {
 		/* We're at the far end of z */
-		g->nz = ng[0] - (g->nz * (npz - 1));
+		g->nuz = g->whole_size[0] - (g->nuz * (npz - 1));
   }
   if (coords[1] == (npy - 1))
   {
 		/* We're at the far end of y */
-		g->ny = ng[1] - (g->ny * (npy - 1));
+		g->nuy = g->whole_size[1] - (g->nuy * (npy - 1));
   }
   if (coords[2] == (npx - 1))
   {
 		/* We're at the far end of x */
-		g->nx = ng[2] - (g->nx * (npx - 1));
+		g->nux = g->whole_size[2] - (g->nux * (npx - 1));
   }
   
-  /* Store the coords in the g structure */
-  g->px = coords[0];
+  g->pz = coords[0];
   g->py = coords[1];
-  g->pz = coords[2];
+  g->px = coords[2];
   
-  printf("Rank: %d at location (%d, %d, %d) with sizes x = %d, y = %d, z = %d. N: %d, S: %d, E: %d, W: %d, U: %d, D: %d\n", rank, coords[0], coords[1], coords[2], g->nx, g->ny, g->nz, g->north, g->south, g->east, g->west, g->up, g->down);
+  g->npz = npz;
+  g->npy = npy;
+  g->npx = npx;
+  
+  /* Who are my neighbours in each direction? */
+  MPI_Cart_shift( cart_comm, 2, 1, &g->up_x, &g->down_x    );
+  MPI_Cart_shift( cart_comm, 1, 1, &g->up_y, &g->down_y );
+  MPI_Cart_shift( cart_comm, 0, 1, &g->up_z, &g->down_z );
+  
+  /* We want each array to actually have two extra elements in each direction so we can
+  store halos or boundary conditions at each end. */
+  g->nx = g->nux + 2;
+  g->ny = g->nuy + 2;
+  g->nz = g->nuz + 2;
 
   /* Allocate the grid. Note we will need two versions of the data on the grid, one to hold
      the current values, and one to write the results into when we are updating the grid. We swap between
-     the two versions as we go from iteration to iteration, the 'current' member of the derived type
-     indicating which version is the most up to date.
-      
-     We're making the array 2 cells bigger in each dimension so that we have a spare cell at the end of every row etc. so that we
-     can send and receive into/from that extra bit. */
+     the two versions as we go from iteration to iteration, the current member of the derived type
+     indicating which version is the most up to date. */
+  for( i = 0; i < 2; i++ ){
 
- for( i = 0; i < 2; i++ ){
-
-    g->data[ i ] = alloc_3d_double(g->nz + 2, g->ny + 2, g->nx +2 ); 
+    g->data[ i ] = alloc_3d_double( g->nz, g->ny, g->nx ); 
     if( g->data[ i ] == NULL )
-    {
-      printf("Failed to allocated memory.\n");
       return EXIT_FAILURE;
-    }
   }
   
   /* Which version of the grid is the "current" version. The other we will write
@@ -135,8 +137,8 @@ void grid_finalize( struct grid *g )
 
   /* Free the grid */
 
-  free_3d_double( g->data[ 1 ], g->nx );
-  free_3d_double( g->data[ 0 ], g->nx );
+  free_3d_double( g->data[ 1 ], g->nz);
+  free_3d_double( g->data[ 0 ], g->nz);
 
 }
 
@@ -146,11 +148,11 @@ void grid_initial_guess( struct grid *g )
   /* Initial guess at the solution. We'll use a very simple one ... */
 
   int i, j, k, l;
-  
+
     for( i = 0; i < 2; i++ ){
-      for( j = 0; j < g->nz - 1; j++ ){
-	for( k = 0; k < g->ny - 1; k++ ){
-	  for( l = 0; l < g->nx - 1; l++ ){
+      for( j = 0; j < g->nz; j++ ){
+	for( k = 0; k < g->ny; k++ ){
+	  for( l = 0; l < g->nx; l++ ){
 	    g->data[ i ][ j ][ k ][ l ] = 0.0;
 	  }
 	}
@@ -167,131 +169,101 @@ void grid_set_boundary( struct grid *g )
      As a simple example set all the faces to zero except the bottom xy face, which we set 
      to unity */
 
-  int i, j, k;
-  
+  int x, y, z, version;
+
   /* Set each face of the cuboid in turn */
   /* Also remember that we need to do do it for both versions */
   
-  /* Our coords in the process grid are stored in g as px, py and pz. If any of these = 0 or = npx
-  (or npy or npz) then we're on the edge of the cuboid, and where we are. We then need to choose
-  the correct bit of the array to set. Remember we're doing this for both versions of the grid 
-  
-  We're also setting the upper and lower bounds for later loops (ub and lb variables). These should
-  be 1 and (n - 2) in the normal case (because the array is 1 bigger in each dimension). We initialise
-  them all first to something that will be correct for anything that isn't changed below. */
-  
-  g->lb_x = 1;
-  g->ub_x = (g->nx - 1);
-  
-  g->lb_y = 1;
-  g->ub_y = (g->ny - 1);
-  
-  g->lb_z = 1;
-  g->ub_z = (g->nz - 1);
-  
   if (g->px == 0)
   {
-  	printf("At x = 0\n");
-  	/* We're at the x = 0 face of the grid. So we need to set the entire face equal to zero */
-  	for (k = 0; k < 2; k++)
+  	/* We're at the LOW X face of the grid. So set it to zero. */
+  	for (version = 0; version < 2; version++)
   	{
-  		for (i = 0; i < g->nz; i++)
+  		for (z = 0; z < g->nz; z++)
   		{
-  			for (j = 0; j < g->ny; j++)
+  			for (y = 0; y < g->ny; y++)
   			{
-  				g->data[k][i][j][1] = 0.0;
+  				g->data[version][z][y][0] = 0.0;
   			}
   		}
   	}
-  	g->lb_x = 2;
   }
+  
   if (g->px == (g->npx - 1))
   {
-    printf("At x = npx\n");
-	/* We're at the high x face of the grid. So we need to set the entire face equal to zero */
-	for (k = 0; k < 2; k++)
+  	/* We're at the HIGH X face of the grid. So set it to zero */
+  	for (version = 0; version < 2; version++)
   	{
-  		for (i = 0; i < g->ny; i++)
+  		for (z = 0; z < g->nz; z++)
   		{
-  			for (j = 0; j < g->nz; j++)
+  			for (y = 0; y < g->ny; y++)
   			{
-  				g->data[k][j][i][g->nx-2] = 0.0;
+  				g->data[version][z][y][g->nx-1] = 0.0;
   			}
   		}
   	}
-  	g->ub_x = (g->nx - 2);
   }
-  	
-  	
-  	if (g->py == 0)
+  
+  if (g->py == 0)
+  {
+  	/* We're at the LOW Y face of the grid. So set it to zero */
+  	for (version = 0; version < 2; version++)
   	{
-  		printf("At y = 0\n");
-		/* We're at the y = 0 face of the grid. So we need to set the entire face equal to zero */
-		for (k = 0; k < 2; k++)
-		{
-			for (i = 0; i < g->nx; i++)
-			{
-				for (j = 0; j < g->nz; j++)
-				{
-					g->data[k][j][1][i] = 0.0;
-				}
-			}
-		}
-		g->lb_y = 2;
-	}
-  	if (g->py == (g->npy - 1))
-  	{
-  		printf("At y = npy\n");
-		/* We're at the high y face of the grid. So we need to set the entire face equal to zero */
-		for (k = 0; k < 2; k++)
-		{
-			for (i = 0; i < g->nx; i++)
-			{
-				for (j = 0; j < g->nz; j++)
-				{
-					g->data[k][j][g->ny-2][i] = 0.0;
-				}
-			}
-		}
-		g->ub_y = (g->ny - 2);
+  		for (z = 0; z < g->nz; z++)
+  		{
+  			for (x = 0; x < g->nx; x++)
+  			{
+  				g->data[version][z][0][x] = 0.0;
+  			}
+  		}
   	}
-  	
-  	if (g->pz == 0)
+  }
+  
+  if (g->py == (g->npy - 1))
+  {
+  	/* We're at the HIGH Y face of the grid. So set it to zero */
+  	for (version = 0; version < 2; version++)
   	{
-  		printf("At z = 0\n");
-		/* We're at the z = 0 face of the grid. So we need to set the entire face equal to ONE (unity) */
-		for (k = 0; k < 2; k++)
-		{
-			for (i = 0; i < g->nx; i++)
-			{
-				for (j = 0; j < g->ny; j++)
-				{
-					g->data[k][1][j][i] = 1.0;
-				}
-			}
-		}
-		g->lb_z = 2;
-	}
-  	if (g->pz == (g->npz - 1))
+  		for (z = 0; z < g->nz; z++)
+  		{
+  			for (x = 0; x < g->nx; x++)
+  			{
+  				g->data[version][z][g->ny-1][x] = 0.0;
+  			}
+  		}
+  	}
+  }
+  
+  if (g->pz == 0)
+  {
+  	for (version = 0; version < 2; version++)
   	{
-  		printf("At z = npz\n");
-		/* We're at the high z face of the grid. So we need to set the entire face equal to zero */
-		for (k = 0; k < 2; k++)
-		{
-			for (i = 0; i < g->nx; i++)
-			{
-				for (j = 0; j < g->ny; j++)
-				{
-					g->data[k][g->nz-2][j][i] = 0.0;
-				}
-			}
-		}
-		g->ub_z = (g->nz - 2);
-	}
-	
+  		for (y = 0; y < g->ny; y++)
+  		{
+  			for (x = 0; x < g->nx; x++)
+  			{
+  				g->data[version][0][y][x] = 1.0;
+  			}
+  		}
+  	}
+  }
+  
+  if (g->pz == (g->npz - 1))
+  {
+  	for (version = 0; version < 2; version++)
+  	{
+  		for (y = 0; y < g->ny; y++)
+  		{
+  			for (x = 0; x < g->nx; x++)
+  			{
+  				g->data[version][g->nz-1][y][x] = 0.0;
+  			}
+  		}
+  	}
+  }  
 }
 
-double grid_update( struct grid *g ) {
+double grid_update( struct grid *g ){
 
   /* Perform the grid update */
 
@@ -300,16 +272,16 @@ double grid_update( struct grid *g ) {
   double dg, diff;
   double start, finish;
 
+
+  int rank;
   int current, update;
+  int lb0, lb1, lb2, ub0, ub1, ub2;
   int i, j, k;
+  int tag = 0;
   
-  int tag, rank;
-  
-  MPI_Request send_req, recv_req;
-  MPI_Request requests[100];
-  int req_num = 0;
-  
-  MPI_Datatype face;
+  MPI_Datatype face1;
+  MPI_Datatype face2;
+  MPI_Datatype face3;
 
   /* Work out which version of the grid hold the current values, and
      which we will write the update into */
@@ -326,73 +298,75 @@ double grid_update( struct grid *g ) {
     fprintf( stderr, "Internal error: impossible value for g->current\n" );
     exit( EXIT_FAILURE );
   }
+
+  /* Bounds for the loops. Remember we should not update the
+     boundaries as they are set by the boundary conditions */
+  lb0 = 1;
+  lb1 = 1;
+  lb2 = 1;
+
+  ub0 = g->nz - 1;
+  ub1 = g->ny - 1;
+  ub2 = g->nx - 1;
   
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  
+  /* ################################### */
+  /* ######### Do Halo Exchange ######## */
+  /* ################################### */
+  
+  /* Create the vector types to extract each of the faces */
+  MPI_Type_vector(g->ny, g->nx, g->nx, MPI_DOUBLE, &face1);
+  MPI_Type_commit(&face1);
+  
+  MPI_Type_vector(g->nz*g->ny, 1, g->nx, MPI_DOUBLE, &face2);
+  MPI_Type_commit(&face2);
+    
+  MPI_Type_vector(g->nz, g->nx, g->ny * g->nx, MPI_DOUBLE, &face3);
+  MPI_Type_commit(&face3);
+    
+  /* Do the sending and receiving - making sure we send and receive from the right bits */
+  MPI_Sendrecv(&(g->data)[current][1][0][0], 1, face1, g->up_z, tag,
+  	&(g->data)[current][g->nz-1][0][0], 1, face1, g->down_z, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  
+  MPI_Sendrecv(&(g->data)[current][g->nz-2][0][0], 1, face1, g->down_z, tag,
+  	&(g->data)[current][0][0][0], 1, face1, g->up_z, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  	
+  
+  MPI_Sendrecv(&(g->data)[current][0][1][0], 1, face3, g->up_y, tag,
+  	&(g->data)[current][0][g->ny-1][0], 1, face3, g->down_y, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  
+  MPI_Sendrecv(&(g->data)[current][0][g->ny-2][0], 1, face3, g->down_y, tag,
+  	&(g->data)[current][0][0][0], 1, face3, g->up_y, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  	
+  	
+  MPI_Sendrecv(&(g->data)[current][0][0][1], 1, face2, g->up_x, tag,
+  	&(g->data)[current][0][0][g->nx-1], 1, face2, g->down_x, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  	
+  MPI_Sendrecv(&(g->data)[current][0][0][g->nx-2], 1, face2, g->down_x, tag,
+  	&(g->data)[current][0][0][0], 1, face2, g->up_x, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);  
 
   /* Perform the update and check for convergence  */
-  
+  /* NB: the condition check has been changed from <= to < compared to the serial version */
+  start = timer();
   dg = 0.0;
-  
-  /* Get the neighbouring faces from the grid neighbours */
-   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
-  MPI_Type_vector(g->ny, g->nx, g->nx, MPI_DOUBLE, &face);
-  MPI_Type_commit(&face);
-  
-  tag = 0;
-
-  /* Exchange for the western face of the chunk */
-  MPI_Sendrecv(&g->data[current][0][0][0], 1, face, g->west, tag,
-  		&g->data[current][0][0][0], 1, face, g->east, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-  
-  MPI_Sendrecv(&g->data[current][g->nz-1][0][0], 1, face, g->east, tag,
-  		&g->data[current][g->nz-1][0][0], 1, face, g->west, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-  
-  
-  /* Exchange North/South faces */
-  MPI_Type_vector(2*g->ny, 1, g->nx, MPI_DOUBLE, &face);
-  MPI_Type_commit(&face);
-    
-  /* Exchange for the northern face of the chunk */
-  MPI_Sendrecv(&g->data[current][0][0][0], 1, face, g->north, tag,
-  		&g->data[current][0][0][0], 1, face, g->south, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-  
-  MPI_Sendrecv(&g->data[current][0][0][g->nx-1], 1, face, g->south, tag,
-  		&g->data[current][0][0][g->nx-1], 1, face, g->north, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    
-    /* Exchange Up/Down faces */
-  MPI_Type_vector(g->nz, g->nx, g->nx * g->ny, MPI_DOUBLE, &face);
-  MPI_Type_commit(&face);
-
-  /* Exchange for the up  face of the chunk */
-  MPI_Sendrecv(&g->data[current][0][0][0], 1, face, g->up, tag,
-  		&g->data[current][0][0][0], 1, face, g->down, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-  MPI_Sendrecv(&g->data[current][0][0][0], 1, face, g->down, tag,
-  		&g->data[current][0][0][0], 1, face, g->up, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-  
-  if (rank == 5)
-  {
-  	printf("Bounds: x %d to %d, y %d to %d, z %d to %d\n", g->lb_x, g->ub_x, g->lb_y, g->ub_y, g->lb_z, g->ub_z);
-  }
-  
-  /* Loop through and do the calculations */
-  for( i = g->lb_x; i < g->ub_x; i++ )
-  {
-    for( j = g->lb_y; j < g->ub_y; j++ )
-    {
-      for( k = g->lb_z; k < g->ub_z; k++ )
-      {
-		g->data[ update ][ i ][ j ][ k ] = ONE_SIXTH * ( g->data[ current ][ i + 1 ][ j     ][ k     ] +
-		g->data[ current ][ i - 1 ][ j     ][ k     ] +
-		g->data[ current ][ i     ][ j + 1 ][ k     ] +
-		g->data[ current ][ i     ][ j - 1 ][ k     ] +
-		g->data[ current ][ i     ][ j     ][ k + 1 ] +
-		g->data[ current ][ i     ][ j     ][ k - 1 ] );
-		diff = fabs( g->data[ update ][ i ][ j ][ k ] - g->data[ current ][ i ][ j ][ k ] );
-		dg = dg > diff ? dg : diff;
+  for( i = lb0; i < ub0; i++ ) {
+    for( j = lb1; j < ub1; j++ ) {
+      for( k = lb2; k < ub2; k++ ) {
+	g->data[ update ][ i ][ j ][ k ] = 
+	  ONE_SIXTH * ( g->data[ current ][ i + 1 ][ j     ][ k     ] +
+			g->data[ current ][ i - 1 ][ j     ][ k     ] +
+			g->data[ current ][ i     ][ j + 1 ][ k     ] +
+			g->data[ current ][ i     ][ j - 1 ][ k     ] +
+			g->data[ current ][ i     ][ j     ][ k + 1 ] +
+			g->data[ current ][ i     ][ j     ][ k - 1 ] );
+	diff = fabs( g->data[ update ][ i ][ j ][ k ] - g->data[ current ][ i ][ j ][ k ] );
+	dg = dg > diff ? dg : diff;
       }
     }
   }
+  finish = timer();
+  g->t_iter += finish - start;
 
   /* Update the iteration counter */
   g->n_iter++;
@@ -401,6 +375,7 @@ double grid_update( struct grid *g ) {
   g->current = update;
 
   return dg;
+
 }
 
 double grid_checksum( struct grid g ){
@@ -411,11 +386,55 @@ double grid_checksum( struct grid g ){
   double sum;
 
   int i, j, k;
+  
+  int rank;
+  
+  int ubx, lbx, uby, lby, ubz, lbz;
+  
+  /* Work out whether we're on the edge or not, as boundary conditions MUST be included
+  in the checksum, but the halo exchanges MUST NOT be included */
+  
+  lbx = lby = lbz = 1;
+  ubx = g.nx - 1;
+  uby = g.ny - 1;
+  ubz = g.nz - 1;
+  
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  
+  if (g.px == 0)
+  {
+  	lbx = 0;
+  }
+  
+  if (g.px == (g.npx - 1))
+  {
+  	ubx = g.nx;
+  }
+  
+  if (g.py == 0)
+  {
+  	lby = 0;
+  }
+  
+  if (g.py == (g.npy - 1))
+  {
+  	uby = g.ny;
+  }
+  
+  if (g.pz == 0)
+  {
+  	lbz = 0;
+  }
+  
+  if (g.pz == (g.npz - 1))
+  {
+  	ubz = g.nz;
+  }  
 
   sum = 0.0;
-  for( i = 1; i < g.nz - 1; i++ ) {
-    for( j = 1; j < g.ny - 1; j++ ) {
-      for( k = 1; k < g.nx - 1; k++ ) {
+  for( i = lbz; i < ubz; i++ ) {
+    for( j = lby; j < uby; j++ ) {
+      for( k = lbx; k < ubx; k++ ) {
 	sum += g.data[ g.current ][ i ][ j ][ k ];
       }
     }
