@@ -2,79 +2,16 @@
 #PBS -S /bin/bash
 # Use 1 core on 1 node
 #PBS -l nodes=1:ppn=8
-# Maximum time to run of 10 minues 
-#PBS -l walltime=02:00:00 
+# Maximum time to run of 20 minues 
+#PBS -l walltime=00:20:00 
                           
 module load gcc/4.3.3 # NEED TO LOAD CORRECT
                       # VERSION OF GCC
 cd $PBS_O_WORKDIR     # Change to directory from 
                       # which job was submitted
                       
-SIZE="1000"
-OUTPUT_FILE="output_1000_nt1-8.txt"
-
-export OMP_NUM_THREADS=1
-./laplace <<END | tail -n 1 >> $OUTPUT_FILE
-$SIZE
-$SIZE
-$SIZE
-0.01
-100
-END
-
-export OMP_NUM_THREADS=2
-./laplace <<END | tail -n 1 >> $OUTPUT_FILE
-$SIZE
-$SIZE
-$SIZE
-0.01
-100
-END
-
-export OMP_NUM_THREADS=3
-./laplace <<END | tail -n 1 >> $OUTPUT_FILE
-$SIZE
-$SIZE
-$SIZE
-0.01
-100
-END
-
-export OMP_NUM_THREADS=4
-./laplace <<END | tail -n 1 >> $OUTPUT_FILE
-$SIZE
-$SIZE
-$SIZE
-0.01
-100
-END
-
-export OMP_NUM_THREADS=5
-./laplace <<END | tail -n 1 >> $OUTPUT_FILE
-$SIZE
-$SIZE
-$SIZE
-0.01
-100
-END
-
-export OMP_NUM_THREADS=6
-./laplace <<END | tail -n 1 >> $OUTPUT_FILE
-$SIZE
-$SIZE
-$SIZE
-0.01
-100
-END
-
-export OMP_NUM_THREADS=7
-./laplace <<END | tail -n 1 >> $OUTPUT_FILE
-$SIZE
-$SIZE
-$SIZE
-0.01
-100
-END
+SIZE="100"
+OUTPUT_FILE="output_openmp.txt"
 
 export OMP_NUM_THREADS=8
 ./laplace <<END | tail -n 1 >> $OUTPUT_FILE

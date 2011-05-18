@@ -2,8 +2,8 @@
 #PBS -S /bin/bash
 # Use 1 core on 1 node
 #PBS -l nodes=1:ppn=8
-# Maximum time to run of 10 minues 
-#PBS -l walltime=1:00:00 
+# Maximum time to run of 20 minues 
+#PBS -l walltime=00:20:00 
                           
 
 module load gcc/4.3.3 # NEED TO LOAD CORRECT
@@ -11,87 +11,10 @@ module load gcc/4.3.3 # NEED TO LOAD CORRECT
 cd $PBS_O_WORKDIR     # Change to directory from 
                       # which job was submitted
                       
-SIZE="1000"
-OUTPUT_FILE="output_1000_np1-8.txt"
-                      
-mpirun -np 1 ./laplace <<END | tail -n 1 >> $OUTPUT_FILE
-$SIZE
-$SIZE
-$SIZE
-0.01
-100
-1
-1
-1
-END
+SIZE="100"
+OUTPUT_FILE="mpi_output"
 
-mpirun -np 2 ./laplace <<END | tail -n 1 >> $OUTPUT_FILE
-$SIZE
-$SIZE
-$SIZE
-0.01
-100
-2
-1
-1
-END
-
-mpirun -np 3 ./laplace <<END | tail -n 1 >> $OUTPUT_FILE
-$SIZE
-$SIZE
-$SIZE
-0.01
-100
-3
-1
-1
-END
-
-mpirun -np 4 ./laplace <<END | tail -n 1 >> $OUTPUT_FILE
-$SIZE
-$SIZE
-$SIZE
-0.01
-100
-2
-2
-1
-END
-
-mpirun -np 5 ./laplace <<END | tail -n 1 >> $OUTPUT_FILE
-$SIZE
-$SIZE
-$SIZE
-0.01
-100
-5
-1
-1
-END
-
-mpirun -np 6 ./laplace <<END | tail -n 1 >> $OUTPUT_FILE
-$SIZE
-$SIZE
-$SIZE
-0.01
-100
-3
-2
-1
-END
-
-mpirun -np 7 ./laplace <<END | tail -n 1 >> $OUTPUT_FILE
-$SIZE
-$SIZE
-$SIZE
-0.01
-100
-7
-1
-1
-END
-
-mpirun -np 8 ./laplace <<END | tail -n 1 >> $OUTPUT_FILE
+mpirun -np 8 ./laplace <<END >> $OUTPUT_FILE
 $SIZE
 $SIZE
 $SIZE
